@@ -1,0 +1,25 @@
+{
+  "name": "harbor-sample",
+  "private": true,
+  "type": "module",
+  "description": "A small SPA for demo-kit's end-to-end test and its skill's trial run: a shipments tracker on a synthetic API.",
+  "scripts": {
+    "api": "node server.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "build:demo": "vite build --config vite.demo.config.ts"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router": "^8.5.0"
+  },
+  "devDependencies": {
+    "@interroseclabs/demo-kit": "file:../..",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5"
+  }
+}

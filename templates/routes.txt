@@ -1,0 +1,3 @@
+# Every page a viewer exploring can open: demo-kit visit opens each through the recorder, and
+# demo-kit check opens each again in the packaged page. One route a line, as the router routes it.
+/

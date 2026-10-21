@@ -1,0 +1,5 @@
+/* The tour in the app's colours: set what differs from the dark theme's defaults. */
+.gd-frame {
+  --gd-accent: #4c8dff;
+  --gd-accent-fg: #ffffff;
+}

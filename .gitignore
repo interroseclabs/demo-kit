@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+# What an end-to-end run makes.
+test/e2e/out/
+examples/*/node_modules/
+examples/*/dist/
+examples/*/dist-demo/

@@ -1,0 +1,52 @@
+{
+  "name": "@interroseclabs/demo-kit",
+  "version": "0.1.0",
+  "description": "Turn a single-page app into an offline guided demo: the real app, its API answered from a recording, in one HTML file.",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "demo-kit": "bin/demo-kit.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./replay": {
+      "types": "./dist/replay.d.ts",
+      "default": "./dist/replay.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "cli",
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run && node --test 'test/cli/*.test.mjs'",
+    "e2e": "node test/e2e/sample-spa.mjs"
+  },
+  "dependencies": {
+    "lucide-preact": "^1.61.0",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "jsdom": "^30.1.3",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

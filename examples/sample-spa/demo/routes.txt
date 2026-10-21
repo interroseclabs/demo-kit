@@ -1,0 +1,8 @@
+# Every page a viewer exploring can open, each opened through the recorder (demo-kit visit) and
+# again by demo-kit check.
+/overview
+/shipments
+/shipments?status=in%20transit
+/shipments?status=delayed
+/shipments?status=delivered
+/reports

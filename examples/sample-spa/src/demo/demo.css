@@ -1,0 +1,11 @@
+/* The tour in Harbor's colours. */
+.gd-frame {
+  --gd-accent: #14b8a6;
+  --gd-accent-fg: #04201d;
+  --gd-surface: #142026;
+  --gd-bg: #0d1418;
+  --gd-border: #22343b;
+  --gd-muted: #1a2a31;
+  --gd-muted-fg: #8aa1a6;
+  --gd-fg: #e4eef0;
+}
