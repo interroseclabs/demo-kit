@@ -642,6 +642,9 @@ svg {
 .gd-intro-chapters .gd-chapter {
   padding: 6px 8px;
 }
+.gd-intro-chapters li {
+  min-width: 0;
+}
 .gd-panel-actions {
   display: flex;
   flex-wrap: wrap;
@@ -724,7 +727,7 @@ svg {
 
 @media (min-width: 640px) {
   .gd-intro-chapters {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 767px) {

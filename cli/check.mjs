@@ -71,6 +71,9 @@ export async function check({ page: file, routes, width = 1440, height = 900, mi
     const config = await page.evaluate(`(() => { try { return JSON.parse(document.getElementById("demo-config")?.textContent ?? "{}"); } catch { return {}; } })()`);
     log(`     prepared for ${config.prospect ?? "nobody in particular"}; call to action: ${config.contact ? `${config.contact.label} → ${config.contact.href}` : "none"}`);
     if (config.contact) check("the bar carries the call to action", Boolean(await page.evaluate(T('[data-gd="bar"] [data-gd="contact"]'))));
+    // Words the welcome cuts off, which a viewer can't read: a chapter's title or blurb too long.
+    const cut = await page.evaluate(`${TA('[data-gd="welcome"] .gd-truncate')}.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent)`);
+    check("the welcome shows each chapter's words whole", cut.length === 0, cut.map((t) => `cut off: "${t}"`).join("; "));
     await settle(page);
 
     // Each route, as a viewer exploring would open it, noting a link on it to a recorded file.
@@ -113,7 +116,10 @@ export async function check({ page: file, routes, width = 1440, height = 900, mi
     await clickOn('[data-gd="start"]');
     const walked = [];
     for (let i = 0; i < steps.length + 2; i++) {
-      const at = await waitFor(`(() => { const c = ${T('[data-gd="card"]')}; return c ? { id: c.dataset.gdStep, anchor: c.dataset.gdAnchor, click: c.dataset.gdClick, title: c.querySelector("h2")?.textContent } : null; })()`, 15000);
+      const at = await waitFor(
+        `(() => { const c = ${T('[data-gd="card"]')}; if (!c) return null; const k = c.querySelector(".gd-kicker"); return { id: c.dataset.gdStep, anchor: c.dataset.gdAnchor, click: c.dataset.gdClick, title: c.querySelector("h2")?.textContent, cut: k && k.scrollWidth > k.clientWidth + 1 ? k.textContent : null }; })()`,
+        15000,
+      );
       if (!at) {
         check(`tour step ${i + 1} shows its card`, false, "no card came up");
         break;
@@ -124,6 +130,7 @@ export async function check({ page: file, routes, width = 1440, height = 900, mi
       walked.push(at.id);
       const problems = [
         at.anchor === "missing" && "its element isn't on the page",
+        at.cut && `its chapter's title is cut off: "${at.cut}"`,
         at.click === "missing" && "what it asks the viewer to click isn't on the page",
         misses.size > before && newer(misses, before),
         errors.length > errs && errors.slice(errs).join("; "),

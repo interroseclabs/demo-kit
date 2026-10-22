@@ -1,3 +1,5 @@
-# Every page a viewer exploring can open: demo-kit visit opens each through the recorder, and
-# demo-kit check opens each again in the packaged page. One route a line, as the router routes it.
+# Every page a viewer can reach by the app's own navigation: its menu, tabs and filters, one route
+# a line, as the address bar shows it after the # (encoded: /shipments?status=in%20transit).
+# demo-kit visit opens each through the recorder, and demo-kit check opens each in the packaged
+# page. A page reached only by clicking a record (a row's detail, a document) is the crawl's.
 /

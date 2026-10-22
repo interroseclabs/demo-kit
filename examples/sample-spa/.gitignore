@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist-demo/
+demo/recording.json
+demo/paths.txt
+demo/misses.txt
+demo/*.html

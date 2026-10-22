@@ -7,8 +7,8 @@ import { createRoot } from "react-dom/client";
 import { createHashRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 
-import { routes } from "../app"; // APP: where the app's routes are
-import "../index.css"; // APP: the app's own global stylesheet, as its main imports it
+// APP: import the app's routes, and its global stylesheet if its own main imports one.
+import { routes } from "../app";
 import { chapters, estate } from "./chapters";
 import "./demo.css";
 

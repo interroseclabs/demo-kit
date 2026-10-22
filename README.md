@@ -26,7 +26,7 @@ The `guided-demo` skill walks the method: the fit check, installing this package
 
 ## Make one by hand
 
-The skill ([`plugin/skills/guided-demo/SKILL.md`](plugin/skills/guided-demo/SKILL.md)) is the method; read it as a checklist. In short:
+The skill ([`plugin/skills/guided-demo/SKILL.md`](https://github.com/interroseclabs/demo-kit/blob/main/plugin/skills/guided-demo/SKILL.md)) is the method; read it as a checklist. In short:
 
 ```bash
 npm install -D github:interroseclabs/demo-kit#v0.1.0
@@ -41,7 +41,7 @@ npx demo-kit package --recording demo/recording.json --build dist-demo --out acm
 npx demo-kit check acme-demo.html --routes demo/routes.txt                              # until: the demo is ready to send
 ```
 
-`npx demo-kit --help` has every flag. [`examples/sample-spa`](examples/sample-spa) is a small app wired for a demo: its `src/demo/` and `demo/` are what a team writes.
+`npx demo-kit --help` has every flag. [`examples/sample-spa`](https://github.com/interroseclabs/demo-kit/tree/main/examples/sample-spa) is a small app wired for a demo: its `src/demo/` and `demo/` are what a team writes.
 
 ## What your app supplies
 

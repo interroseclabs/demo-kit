@@ -11,8 +11,8 @@ The kit's types are in `node_modules/@interroseclabs/demo-kit/dist/*.d.ts`; this
   body: "The list filtered to delayed, …",  // one or two sentences of fact
   to: "/shipments?status=delayed",          // the route, as the router routes it
   anchor: { section: "Shipments table" },   // what the card points at and the dim leaves lit
-  click: { on: { selector: "tr.clickable" }, hint: "Click SHP-1001 to open it." },
-  needs: { open: { label: "Shipment SHP-1001" }, by: { selector: "tr.clickable" } },
+  click: { on: { text: "SHP-1001", starts: true }, hint: "Click SHP-1001 to open it." },
+  needs: { open: { label: "Shipment SHP-1001" }, by: { text: "SHP-1001", starts: true } },
 }
 ```
 
@@ -29,8 +29,8 @@ In order of preference:
 |---|---|---|
 | `{ section: "Delays by port" }` | a `<section>` by its accessible name: `aria-label`, `aria-labelledby`, or its own first heading; any case | a panel, card or region |
 | `{ label: "Delayed", starts?: true }` | an element by its `aria-label`, exactly or by its start | a figure, a dialog, an icon button |
-| `{ text: "Open the bill of lading", starts?: true, pressed?: true }` | a link, button, tab, row, menu item or option by its words; `pressed` wants `aria-pressed="true"` | something the viewer clicks |
-| `{ selector: "tr.clickable" }` | the first visible match | what has no name, such as a table's first row |
+| `{ text: "Open the bill of lading", starts?: true, pressed?: true }` | a link, button, tab, table row, menu item or option by its words, the innermost where several read alike; `pressed` wants `aria-pressed="true"` | something the viewer clicks; a row by how it starts: `{ text: "SHP-1001", starts: true }` |
+| `{ selector: ".map canvas" }` | the first visible match | what has no name and no words |
 
 Any form takes `in: <anchor>` to look only inside another: `{ text: "Site", in: { section: "Estate map" } }`. Only elements on screen are found, so a hidden duplicate is passed over.
 
@@ -68,4 +68,17 @@ startDemo({
 
 ## Colours
 
-Tokens on `.gd-frame`, set in `src/demo/demo.css` or by `colors`: `--gd-accent`, `--gd-accent-fg`, `--gd-bg`, `--gd-surface`, `--gd-fg`, `--gd-muted`, `--gd-muted-fg`, `--gd-border`, `--gd-dim`, and `--gd-font` (the app's own font by default).
+Tokens on `.gd-frame`, set in `src/demo/demo.css` or by `colors` (without the `--gd-`). Each starts from the `theme`'s value.
+
+| Token | Paints |
+|---|---|
+| `--gd-accent` | the brand colour: primary buttons, the active mode, the spotlight's ring, the beacon, hotspots, progress |
+| `--gd-accent-fg` | text and icons on the accent |
+| `--gd-surface` | the bar, the cards, the welcome and end screens |
+| `--gd-bg` | outlined buttons, the mode switch's track, the welcome's backdrop |
+| `--gd-fg` | text |
+| `--gd-muted` | a background: hovered buttons and rows, progress pips not yet reached |
+| `--gd-muted-fg` | secondary text: card bodies, blurbs, counts |
+| `--gd-border` | borders and dividers |
+| `--gd-dim` | the shade over the page around the spotlight |
+| `--gd-font` | the typeface; the app's own by default |

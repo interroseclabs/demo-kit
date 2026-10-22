@@ -6,13 +6,14 @@ export type Anchor =
   | { section: string; in?: Anchor }
   // An element by its aria-label, exactly or by how it starts.
   | { label: string; starts?: true; in?: Anchor }
-  // A link, button, tab, row or summary by its text, exactly or by how it starts, and pressed
-  // (aria-pressed="true") where it says so.
+  // A link, button, tab, table row, menu item, option or summary by its text, exactly or by how
+  // it starts, and pressed (aria-pressed="true") where it says so. A row's text is all its cells',
+  // so a row is found by how it starts: { text: "SHP-1001", starts: true }.
   | { text: string; starts?: true; pressed?: true; in?: Anchor }
   // An element by a CSS selector, for what has none of those: a table's first row.
   | { selector: string; in?: Anchor };
 
-const CLICKABLE = "a, button, [role='button'], [role='tab'], [role='row'], [role='menuitem'], [role='option'], summary";
+const CLICKABLE = "a, button, [role='button'], [role='tab'], tr, [role='row'], [role='menuitem'], [role='option'], summary";
 
 const visible = (e: Element): e is HTMLElement => e instanceof HTMLElement && e.getClientRects().length > 0;
 const words = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
@@ -66,13 +67,13 @@ export function findAnchor(anchor: Anchor, root: ParentNode = document): HTMLEle
   }
   if ("text" in anchor) {
     const want = anchor.text;
-    return (
-      [...scope.querySelectorAll(CLICKABLE)].find((e): e is HTMLElement => {
-        const text = words(e.textContent);
-        if (anchor.pressed && e.getAttribute("aria-pressed") !== "true") return false;
-        return (anchor.starts ? text.startsWith(want) : text === want) && visible(e);
-      }) ?? null
-    );
+    const found = [...scope.querySelectorAll(CLICKABLE)].filter((e): e is HTMLElement => {
+      const text = words(e.textContent);
+      if (anchor.pressed && e.getAttribute("aria-pressed") !== "true") return false;
+      return (anchor.starts ? text.startsWith(want) : text === want) && visible(e);
+    });
+    // The innermost: a row whose one cell is a button reads as the button's words too.
+    return found.find((e) => !found.some((o) => o !== e && e.contains(o))) ?? null;
   }
   return [...scope.querySelectorAll(anchor.selector)].find(visible) ?? null;
 }

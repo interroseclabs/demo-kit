@@ -50,6 +50,16 @@ describe("findAnchor", () => {
     expect(findAnchor({ text: "Open" })?.id).toBe("b");
   });
 
+  it("finds the button in a row, not the row, when both read alike", () => {
+    page(`<table><tr id="r"><td><button id="b">Open</button></td></tr></table>`);
+    expect(findAnchor({ text: "Open" })?.id).toBe("b");
+  });
+
+  it("finds a table row by how its text starts", () => {
+    page(`<table><tr id="h"><th>Shipment</th></tr><tr id="r1"><td>SHP-1001</td><td>Santos</td></tr></table>`);
+    expect(findAnchor({ text: "SHP-1001", starts: true })?.id).toBe("r1");
+  });
+
   it("finds by a selector, as a last resort", () => {
     page(`<table><tr class="row" id="r1"></tr></table>`);
     expect(findAnchor({ selector: "tr.row" })?.id).toBe("r1");

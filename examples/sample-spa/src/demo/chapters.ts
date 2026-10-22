@@ -59,7 +59,7 @@ export function chapters(recording: Recording): Chapter[] {
           body: "The list filtered to delayed, with each one's route, carrier and how late it is.",
           to: "/shipments?status=delayed",
           anchor: { section: "Shipments table" },
-          click: first ? { on: { selector: "tr.clickable" }, hint: `Click ${first.id} to open it.` } : undefined,
+          click: first ? { on: { text: first.id, starts: true }, hint: `Click ${first.id} to open it.` } : undefined,
         },
         {
           id: "shipment",
@@ -67,7 +67,7 @@ export function chapters(recording: Recording): Chapter[] {
           body: first ? `${first.carrier}, ${first.from} to ${first.to}, ${n(first.containers)} containers.` : "Its route, carrier and containers.",
           to: "/shipments?status=delayed",
           anchor: first ? { label: `Shipment ${first.id}` } : undefined,
-          needs: first ? { open: { label: `Shipment ${first.id}` }, by: { selector: "tr.clickable" } } : undefined,
+          needs: first ? { open: { label: `Shipment ${first.id}` }, by: { text: first.id, starts: true } } : undefined,
           click: first ? { on: { text: "Open the bill of lading" }, hint: "Click Open the bill of lading." } : undefined,
         },
       ],
