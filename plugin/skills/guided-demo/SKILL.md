@@ -15,6 +15,8 @@ Work through the steps in order. Each ends on its **done when** line.
 
 ## 1. Fit
 
+The kit needs the app's source, runnable in dev: the demo is a build of the app's own front end with the tour inside it. A running container or image of the app is the dev install to record from, never the whole of what is needed; with no source, tell the user so and stop.
+
 The kit fits an app whose pages are drawn in the browser from data it reads over HTTP GET. Read the app's `package.json`, its router and its API client, then run it in dev with the browser's network panel open and click through it. In the panel, look at the requests each page makes: their method, their path's prefix, what they answer, and anything sent to another origin or over a WebSocket.
 
 It fits when all three hold:
@@ -32,6 +34,8 @@ It doesn't fit when pages arrive as server-rendered HTML (Next.js server compone
 ```bash
 npm install -D github:interroseclabs/demo-kit#v0.1.1
 ```
+
+Installing needs read access to the private `interroseclabs/demo-kit` repo; an npm error reaching it means the user needs that access first. The app's CI needs it too: the kit's README has the read-only deploy key that gives it, under CI.
 
 Copy the templates from `node_modules/@interroseclabs/demo-kit/templates/` into the app: `demo.html` and `vite.demo.config.ts` at the root beside `index.html`, `main.tsx`, `chapters.ts` and `demo.css` in `src/demo/`, `routes.txt` in `demo/`. Replace each `APP` in `demo.html`, `vite.demo.config.ts` and `main.tsx` now; an `APP` line with nothing in this app to name (a stylesheet its main doesn't import) goes. `chapters.ts` keeps its placeholders until step 6, when the recording has the figures it quotes. `npx demo-kit --help` lists every command and flag.
 
