@@ -35,8 +35,6 @@ It doesn't fit when pages arrive as server-rendered HTML (Next.js server compone
 npm install -D github:interroseclabs/demo-kit#v0.1.1
 ```
 
-Installing needs read access to the private `interroseclabs/demo-kit` repo; an npm error reaching it means the user needs that access first. The app's CI needs it too: the kit's README has the read-only deploy key that gives it, under CI.
-
 Copy the templates from `node_modules/@interroseclabs/demo-kit/templates/` into the app: `demo.html` and `vite.demo.config.ts` at the root beside `index.html`, `main.tsx`, `chapters.ts` and `demo.css` in `src/demo/`, `routes.txt` in `demo/`. Replace each `APP` in `demo.html`, `vite.demo.config.ts` and `main.tsx` now; an `APP` line with nothing in this app to name (a stylesheet its main doesn't import) goes. `chapters.ts` keeps its placeholders until step 6, when the recording has the figures it quotes. `npx demo-kit --help` lists every command and flag.
 
 **Done when** `npx demo-kit --help` prints and the templates are in the app.

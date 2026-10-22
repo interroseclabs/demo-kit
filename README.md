@@ -15,7 +15,6 @@ It does when your app is drawn in the browser from JSON it reads over HTTP GET: 
 
 ## Before you start
 
-- **Read access to this repo.** It is private: ask an owner of interroseclabs to add you, and sign git in to GitHub (`gh auth login`), since the plugin and the package both come from here.
 - **Claude Code, Node 22 or newer, and Google Chrome**, which `visit` and `check` drive (`CHROME` names another Chrome or Chromium).
 - **The app's source**, running in dev (`npm install`, `npm run dev`). The demo is a build of the app's own front end with the tour inside it, so a running container or image of the app isn't enough on its own.
 - **A dev install of the app with synthetic data**, its API reachable from your machine, for the recorder to sit in front of. A Docker container does: publish its port (`docker run -p 8000:8000 …`) and record with `--upstream http://localhost:8000`, adding `--insecure` if it serves a self-signed certificate.
@@ -59,32 +58,6 @@ npx demo-kit check acme-demo.html --routes demo/routes.txt                      
 | `src/demo/chapters.ts` | The tour: chapters of steps, each a route, an anchor found by accessible name, and words whose figures are read from the recording. |
 | `src/demo/demo.css` | Your brand colours, as `--gd-*` tokens. |
 | `demo/routes.txt`, `demo/crawl.mjs` | Every page a viewer can open, and every read a click can reach, for the recorder to keep. |
-
-## CI
-
-The app's CI installs the kit from this private repo, which it can't do without a credential: npm is refused, and the build fails. Give it a read-only deploy key, once per app repo:
-
-```bash
-ssh-keygen -t ed25519 -N "" -C "<app> CI reads demo-kit" -f /tmp/demo-kit-ci
-gh repo deploy-key add /tmp/demo-kit-ci.pub --repo interroseclabs/demo-kit --title "<app> CI (read-only)"
-gh secret set DEMO_KIT_DEPLOY_KEY --repo interroseclabs/<app> < /tmp/demo-kit-ci
-rm /tmp/demo-kit-ci /tmp/demo-kit-ci.pub
-```
-
-Then load it in each job that runs `npm ci`, before it:
-
-```yaml
-- name: Read access to demo-kit
-  env:
-    DEMO_KIT_DEPLOY_KEY: ${{ secrets.DEMO_KIT_DEPLOY_KEY }}
-  run: |
-    install -m 700 -d ~/.ssh
-    printf '%s\n' "$DEMO_KIT_DEPLOY_KEY" > ~/.ssh/demo-kit && chmod 600 ~/.ssh/demo-kit
-    echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" >> ~/.ssh/known_hosts
-    git config --global core.sshCommand "ssh -i ~/.ssh/demo-kit -o IdentitiesOnly=yes"
-```
-
-The host key is GitHub's published one, so nothing is trusted on first use.
 
 ## Rules that keep a demo safe to send
 
