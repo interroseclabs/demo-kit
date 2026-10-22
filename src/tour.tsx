@@ -575,7 +575,8 @@ function Card({
       aria-label="Guided demo"
       aria-live="polite"
       class={cx("gd-card", narrow && "gd-card-narrow")}
-      style={p ? { left: p.left, top: p.top } : undefined}
+      // On a narrow window the card sits across the foot of the view, above any footer it leaves lit.
+      style={p ? { left: p.left, top: p.top } : { bottom: window.innerHeight - view.top - view.height + 12 }}
       data-gd="card"
       data-gd-step={step.id}
       data-gd-anchor={anchor}

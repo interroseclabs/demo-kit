@@ -433,7 +433,6 @@ svg {
 }
 .gd-card-narrow {
   right: 12px;
-  bottom: 40px;
   left: 12px;
   width: auto;
 }
