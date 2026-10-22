@@ -13,8 +13,7 @@ body {
   margin: 0;
   background: var(--bg);
 }
-#root,
-.gd-mount {
+#root {
   height: 100%;
 }
 .shell {

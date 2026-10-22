@@ -3,17 +3,29 @@
 // welcome to its end screen by its own Next, explores freely, and opens the tour on a phone's
 // window. It fails on any read the recording lacks, any page error, any request to the network,
 // and any step whose element or click the page doesn't show.
-import { readFileSync, statSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { gunzipSync } from "node:zlib";
 
-import { MISSING } from "../dist/replay.js";
+import { MISSING, ownURL, RECORDING_ID, recordingKey } from "../dist/replay.js";
 import { launch, listOf, settle } from "./chrome.mjs";
 
 const OWN = /^(file|data|blob|about|chrome|chrome-extension|devtools):/i;
 
+// filesIn is the keys of the files a page's recording holds to download: what isn't JSON or text.
+export function filesIn(html) {
+  const data = new RegExp(`<script type="application/octet-stream" id="${RECORDING_ID}">([^<]+)</script>`).exec(html)?.[1];
+  if (!data) return new Set();
+  const recording = JSON.parse(gunzipSync(Buffer.from(data, "base64")).toString());
+  return new Set(Object.entries(recording).filter(([, r]) => r.base64 || r.disposition).map(([k]) => k));
+}
+
 export async function check({ page: file, routes, width = 1440, height = 900, misses: missesOut, log = console.log }) {
+  const files = filesIn(readFileSync(file, "utf8"));
   const page = await launch({ width, height });
+  const downloads = join(page.work, "downloads");
+  await page.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloads });
   const misses = new Map();
   const errors = [];
   const network = new Set();
@@ -61,13 +73,36 @@ export async function check({ page: file, routes, width = 1440, height = 900, mi
     if (config.contact) check("the bar carries the call to action", Boolean(await page.evaluate(T('[data-gd="bar"] [data-gd="contact"]'))));
     await settle(page);
 
-    // Each route, as a viewer exploring would open it.
+    // Each route, as a viewer exploring would open it, noting a link on it to a recorded file.
+    let download = null;
     for (const route of routes ? listOf(readFileSync(routes, "utf8")) : []) {
       const before = misses.size;
       const errs = errors.length;
       await page.evaluate(`location.hash = ${JSON.stringify(route.startsWith("/") ? route : `/${route}`)}`);
       await settle(page);
       check(`opens ${route}`, misses.size === before && errors.length === errs, newer(misses, before));
+      if (!download) {
+        const hrefs = (await page.evaluate(`[...document.querySelectorAll(".gd-mount a[href]")].map((a) => a.getAttribute("href"))`)) ?? [];
+        const href = hrefs.find((h) => !h.startsWith("#") && files.has(keyOf(h)));
+        if (href) download = { route, href };
+      }
+    }
+
+    // A link to a recorded file downloads it, as the app's own download would.
+    if (download) {
+      await page.evaluate(`location.hash = ${JSON.stringify(download.route.startsWith("/") ? download.route : `/${download.route}`)}`);
+      await settle(page);
+      await page.evaluate(`[...document.querySelectorAll(".gd-mount a[href]")].find((a) => a.getAttribute("href") === ${JSON.stringify(download.href)})?.click()`);
+      let saved = [];
+      for (let i = 0; i < 50 && !saved.some((f) => !f.endsWith(".crdownload")); i++) {
+        await sleep(100);
+        try {
+          saved = readdirSync(downloads);
+        } catch {
+          // Nothing has started downloading yet.
+        }
+      }
+      check(`a link to a recorded file downloads it, on ${download.route}`, saved.some((f) => !f.endsWith(".crdownload")), saved.join(", ") || `${download.href} downloaded nothing`);
     }
 
     // The tour, from its welcome, by its own Next: a click step's Next takes its click.
@@ -144,6 +179,11 @@ export async function check({ page: file, routes, width = 1440, height = 900, mi
     log(ok ? "the demo is ready to send" : `not ready: ${failed} checks failed, ${misses.size} reads missing, ${errors.length} page errors`);
     return { ok, failed, misses: [...misses.values()], errors };
   }
+}
+
+function keyOf(href) {
+  const url = ownURL(href);
+  return url ? recordingKey(url) : null;
 }
 
 function newer(misses, before) {

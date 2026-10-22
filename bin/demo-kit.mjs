@@ -14,7 +14,7 @@ const USAGE = `demo-kit <command> [options]
            Reads each path through the recorder: what a click can ask for, or check's misses.
   package  --recording <file> --build <dir> --out <page.html> [--html demo.html]
            [--prospect <name>] [--contact-url <https:|mailto:>] [--contact-label <words>]
-           [--replace FROM=TO]... [--allow-domain <domain>]... [--title <title>]
+           [--replace FROM=TO]... [--transform <module.mjs>] [--allow-domain <domain>]... [--title <title>]
            Inlines the recording and the demo build into one page that opens from a file.
   check    <page.html> [--routes <file>] [--misses <file>]
            Opens the page from a file in headless Chrome, walks the tour, and fails on anything
@@ -44,6 +44,7 @@ const options = {
   "contact-url": { type: "string" },
   "contact-label": { type: "string" },
   replace: { type: "string", multiple: true },
+  transform: { type: "string" },
   "allow-domain": { type: "string", multiple: true },
   title: { type: "string" },
   misses: { type: "string" },
@@ -97,7 +98,7 @@ try {
     case "package": {
       need(v, "recording", "build", "out");
       const { packagePage } = await import("../cli/package.mjs");
-      packagePage({
+      await packagePage({
         recording: v.recording,
         build: v.build,
         html: v.html,
@@ -106,6 +107,7 @@ try {
         contactUrl: v["contact-url"],
         contactLabel: v["contact-label"],
         replace: v.replace ?? [],
+        transform: v.transform,
         allowDomain: v["allow-domain"] ?? [],
         title: v.title,
       });

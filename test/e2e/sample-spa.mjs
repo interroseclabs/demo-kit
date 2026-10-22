@@ -116,6 +116,17 @@ try {
     "dana.ops@lakeside.example=demo@harbor.example",
   ]);
   run("check", ["check", join(out, "harbor-demo.html"), "--routes", "demo/routes.txt", "--misses", join(out, "misses.txt")]);
+
+  // A page missing a read fails, and names the read for demo-kit fetch.
+  const short = JSON.parse(readFileSync(recording, "utf8"));
+  delete short["/api/reports"];
+  writeFileSync(join(out, "short.json"), JSON.stringify(short));
+  run("package", ["package", "--recording", join(out, "short.json"), "--build", join(out, "dist-demo"), "--out", join(out, "short.html"), "--replace", "dana.ops@lakeside.example=demo@harbor.example"]);
+  console.log("\n$ demo-kit check short.html (which must fail)");
+  const shortCheck = spawnSync(process.execPath, [kit, "check", join(out, "short.html"), "--routes", "demo/routes.txt", "--misses", join(out, "short-misses.txt")], { cwd: app, encoding: "utf8" });
+  if (shortCheck.status !== 1) throw new Error(`check passed a page missing a read:\n${shortCheck.stdout}`);
+  if (readFileSync(join(out, "short-misses.txt"), "utf8").trim() !== "/api/reports  [/api/reports]") throw new Error("check didn't name the missing read");
+  console.log("ok   check fails a page missing a read, and names it");
   console.log("\nend to end: ok");
 } catch (e) {
   failed = true;

@@ -39,10 +39,10 @@ const read = (page) => {
   return { recorded: JSON.parse(gunzipSync(Buffer.from(data, "base64")).toString()), config };
 };
 
-test("inlines the recording, the config, the script, the stylesheet and the icon into one page", () => {
+test("inlines the recording, the config, the script, the stylesheet and the icon into one page", async () => {
   const dir = build();
   const out = join(dir, "out.html");
-  packagePage({
+  await packagePage({
     recording: recording({
       "/api/x?b=2&a=in%20transit": { type: "application/json", body: '{"who":"dana@corp.example.com"}' },
       "/api/me": { type: "application/json", body: '{"email":"dana@lakeside.example"}' },
@@ -66,19 +66,28 @@ test("inlines the recording, the config, the script, the stylesheet and the icon
   assert.doesNotMatch(page, /assets\//);
 });
 
-test("refuses a recording with an address at a real-looking domain, unless it is allowed", () => {
+test("refuses a recording with an address at a real-looking domain, unless it is allowed", async () => {
   const dir = build();
   const r = recording({ "/api/me": { type: "application/json", body: '{"email":"pat@acme-corp.io"}' } });
-  assert.throws(() => packagePage({ recording: r, build: dir, out: join(dir, "o.html"), log: () => {} }), /acme-corp\.io: 1, such as in \/api\/me/);
-  packagePage({ recording: r, build: dir, out: join(dir, "o.html"), allowDomain: ["acme-corp.io"], log: () => {} });
+  await assert.rejects(packagePage({ recording: r, build: dir, out: join(dir, "o.html"), log: () => {} }), /acme-corp\.io: 1, such as in \/api\/me/);
+  await packagePage({ recording: r, build: dir, out: join(dir, "o.html"), allowDomain: ["acme-corp.io"], log: () => {} });
 });
 
-test("refuses a build of more than one script, and a call to action that isn't a link", () => {
+test("refuses a build of more than one script, and a call to action that isn't a link", async () => {
   const r = recording({ "/api/me": { type: "application/json", body: "{}" } });
   const two = build({ scripts: 2 });
-  assert.throws(() => packagePage({ recording: r, build: two, out: join(two, "o.html"), log: () => {} }), /2 scripts/);
+  await assert.rejects(packagePage({ recording: r, build: two, out: join(two, "o.html"), log: () => {} }), /2 scripts/);
   const one = build();
-  assert.throws(() => packagePage({ recording: r, build: one, out: join(one, "o.html"), contactUrl: "javascript:alert(1)", log: () => {} }), /https: or mailto:/);
+  await assert.rejects(packagePage({ recording: r, build: one, out: join(one, "o.html"), contactUrl: "javascript:alert(1)", log: () => {} }), /https: or mailto:/);
+});
+
+test("lets the app's transform change what it recorded", async () => {
+  const dir = build();
+  const transform = join(mkdtempSync(join(tmpdir(), "t-")), "t.mjs");
+  writeFileSync(transform, `export default (r) => { const s = JSON.parse(r["/api/status"].body); s.version = "demo"; r["/api/status"].body = JSON.stringify(s); return r; };`);
+  const out = join(dir, "o.html");
+  await packagePage({ recording: recording({ "/api/status": { type: "application/json", body: '{"version":"g95d0186"}' } }), build: dir, out, transform, log: () => {} });
+  assert.equal(read(readFileSync(out, "utf8")).recorded["/api/status"].body, '{"version":"demo"}');
 });
 
 test("emailsIn passes the domains reserved for examples", () => {

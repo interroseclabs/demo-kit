@@ -5,7 +5,8 @@
 // anyone the page is sent to can read all of it.
 import { gzipSync } from "node:zlib";
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { CONFIG_ID } from "../dist/config.js";
 import { RECORDING_ID, recordingKeyOf } from "../dist/replay.js";
@@ -55,8 +56,11 @@ export function rekey(raw, replace = []) {
 // A script's text can't hold "</script", which would end its element early.
 const scriptSafe = (s) => s.replace(/<\/(script)/gi, "<\\/$1");
 
-export function packagePage({ recording, build, html = "demo.html", out, prospect, contactUrl, contactLabel = "Talk to us", replace = [], allowDomain = [], title, log = console.log }) {
-  const keyed = rekey(JSON.parse(readFileSync(recording, "utf8")), replace);
+export async function packagePage({ recording, build, html = "demo.html", out, prospect, contactUrl, contactLabel = "Talk to us", replace = [], transform, allowDomain = [], title, log = console.log }) {
+  let keyed = rekey(JSON.parse(readFileSync(recording, "utf8")), replace);
+  // An app's own change to what it recorded, such as the version its status bar shows: a module
+  // whose default export takes the keyed recording and returns it.
+  if (transform) keyed = (await (await import(pathToFileURL(resolve(transform)).href)).default(keyed)) ?? keyed;
   if (Object.keys(keyed).length === 0) throw new Error(`${recording} holds no responses: record the app first`);
 
   const people = emailsIn(keyed, allowDomain);
