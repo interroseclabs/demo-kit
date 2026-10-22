@@ -1,4 +1,4 @@
-import type { TourRouter, Where } from "./steps";
+import type { TourRouter, Where } from "./steps.js";
 
 // whereInHash is the route a URL's hash holds: "#/projects/p1?tab=tasks#L4" is /projects/p1, its
 // query and its own hash, as a hash router reads it.

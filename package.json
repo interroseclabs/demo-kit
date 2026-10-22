@@ -1,6 +1,6 @@
 {
   "name": "@interroseclabs/demo-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Turn a single-page app into an offline guided demo: the real app, its API answered from a recording, in one HTML file.",
   "license": "UNLICENSED",
   "private": true,

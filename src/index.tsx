@@ -1,15 +1,15 @@
 import { render } from "preact";
 
-import { readConfig, type DemoConfig } from "./config";
-import { installReplay, readRecording, type Recording, type ReplayOptions } from "./replay";
-import { hashRouter } from "./router";
-import type { Chapter, TourRouter } from "./steps";
-import { LIGHT, SHADOW } from "./styles";
-import { DemoTour, type TourText } from "./tour";
+import { readConfig, type DemoConfig } from "./config.js";
+import { installReplay, readRecording, type Recording, type ReplayOptions } from "./replay.js";
+import { hashRouter } from "./router.js";
+import type { Chapter, TourRouter } from "./steps.js";
+import { LIGHT, SHADOW } from "./styles.js";
+import { DemoTour, type TourText } from "./tour.js";
 
-export { describeAnchor, findAnchor, findSection, sameRoute, sectionName, waitForAnchor, type Anchor } from "./anchor";
-export { CONFIG_ID, readConfig, type DemoConfig } from "./config";
-export { place, visibleBox, type Box, type Placement, type Side } from "./place";
+export { describeAnchor, findAnchor, findSection, sameRoute, sectionName, waitForAnchor, type Anchor } from "./anchor.js";
+export { CONFIG_ID, readConfig, type DemoConfig } from "./config.js";
+export { place, visibleBox, type Box, type Placement, type Side } from "./place.js";
 export {
   answer,
   bytes,
@@ -30,12 +30,12 @@ export {
   type Recorded,
   type Recording,
   type ReplayOptions,
-} from "./replay";
-export { hashRouter, whereInHash } from "./router";
-export type { Chapter, TourRouter, TourStep, Where } from "./steps";
-export type { TourText } from "./tour";
+} from "./replay.js";
+export { hashRouter, whereInHash } from "./router.js";
+export type { Chapter, TourRouter, TourStep, Where } from "./steps.js";
+export type { TourText } from "./tour.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 // The tour's colour tokens, as --gd-<token> on .gd-frame: accent and accent-fg are its brand
 // colour and the text on it; bg, surface, fg, muted, muted-fg and border its panels and words;

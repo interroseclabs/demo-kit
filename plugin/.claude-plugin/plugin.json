@@ -1,6 +1,6 @@
 {
   "name": "demo-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Make an offline guided demo of a single-page app: one HTML file, the real app on a recorded API, with a Walnut-style tour. Uses the @interroseclabs/demo-kit package.",
   "author": { "name": "Interrosec Labs" },
   "repository": "https://github.com/interroseclabs/demo-kit",

@@ -29,7 +29,7 @@ The `guided-demo` skill walks the method: the fit check, installing this package
 The skill ([`plugin/skills/guided-demo/SKILL.md`](https://github.com/interroseclabs/demo-kit/blob/main/plugin/skills/guided-demo/SKILL.md)) is the method; read it as a checklist. In short:
 
 ```bash
-npm install -D github:interroseclabs/demo-kit#v0.1.0
+npm install -D github:interroseclabs/demo-kit#v0.1.1
 cp node_modules/@interroseclabs/demo-kit/templates/...   # demo.html, src/demo/, vite.demo.config.ts, demo/routes.txt
 
 npx demo-kit record --upstream http://127.0.0.1:8000 --recording demo/recording.json   # a proxy in front of your dev API

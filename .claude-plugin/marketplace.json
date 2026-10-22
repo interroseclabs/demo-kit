@@ -7,7 +7,7 @@
       "name": "demo-kit",
       "source": "./plugin",
       "description": "Make an offline guided demo of a single-page app: one HTML file, the real app on a recorded API, with a Walnut-style tour.",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }

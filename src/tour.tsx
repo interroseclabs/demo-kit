@@ -2,10 +2,10 @@ import type { ComponentChildren, JSX } from "preact";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Compass, Hand, ListOrdered, MousePointerClick, Play, RotateCcw, X } from "lucide-preact";
 
-import { findAnchor, sameRoute, scrollerOf, waitForAnchor, type Anchor } from "./anchor";
-import type { DemoConfig } from "./config";
-import { place, visibleBox, type Box } from "./place";
-import type { Chapter, TourRouter, TourStep, Where } from "./steps";
+import { findAnchor, sameRoute, scrollerOf, waitForAnchor, type Anchor } from "./anchor.js";
+import type { DemoConfig } from "./config.js";
+import { place, visibleBox, type Box } from "./place.js";
+import type { Chapter, TourRouter, TourStep, Where } from "./steps.js";
 
 // The demo is in one of four modes: the welcome, the guided tour, exploring freely, and the end.
 type Mode = "intro" | "guided" | "explore" | "outro";

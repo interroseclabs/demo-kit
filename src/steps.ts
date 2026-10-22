@@ -1,4 +1,4 @@
-import type { Anchor } from "./anchor";
+import type { Anchor } from "./anchor.js";
 
 // TourStep is one stop of the guided tour: a page, what on it the card points at, and what the
 // viewer reads there. A step with click goes on once the viewer clicks what it names, as Walnut's
