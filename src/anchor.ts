@@ -1,5 +1,9 @@
+import { visibleBox, type Box } from "./place.js";
+
 // Anchor is where on the page a tour step points: an element the viewer can see, found the way a
-// reader finds it, by its accessible name or its words, never by a class name.
+// reader finds it, by its accessible name or its words, never by a class name. What the page
+// itself doesn't hold is looked for in its same-origin frames, as a viewer sees them as one page;
+// an `in` that names a frame looks in the page it holds.
 export type Anchor =
   // A <section> by its accessible name: its aria-label, the element it is labelled by, or else
   // its own first heading. Any case.
@@ -15,8 +19,21 @@ export type Anchor =
 
 const CLICKABLE = "a, button, [role='button'], [role='tab'], tr, [role='row'], [role='menuitem'], [role='option'], summary";
 
-const visible = (e: Element): e is HTMLElement => e instanceof HTMLElement && e.getClientRects().length > 0;
+// An element of a frame's page is that window's HTMLElement, not this one's.
+const isHTML = (e: Element): e is HTMLElement => e instanceof ((e.ownerDocument.defaultView as (Window & typeof globalThis) | null)?.HTMLElement ?? HTMLElement);
+const visible = (e: Element): e is HTMLElement => isHTML(e) && e.getClientRects().length > 0;
 const words = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+
+// frameDocument is the page a frame element holds, where it is of this origin, or null.
+function frameDocument(e: ParentNode): Document | null {
+  const tag = (e as Element).tagName;
+  if (tag !== "IFRAME" && tag !== "FRAME") return null;
+  try {
+    return (e as HTMLIFrameElement).contentDocument;
+  } catch {
+    return null;
+  }
+}
 
 // sectionName is a section's accessible name: its aria-label, else the text of the elements its
 // aria-labelledby names, else its own first heading's text.
@@ -48,10 +65,26 @@ export function findSection(root: ParentNode, name: string): HTMLElement | null 
   return null;
 }
 
-// findAnchor is the element anchor names that is on screen now, or null.
+// findAnchor is the element anchor names that is on screen now, or null: on the page first, then
+// in its drawn same-origin frames, in the order they come.
 export function findAnchor(anchor: Anchor, root: ParentNode = document): HTMLElement | null {
   const scope = anchor.in ? findAnchor(anchor.in, root) : root;
   if (!scope) return null;
+  return search(anchor, frameDocument(scope) ?? scope);
+}
+
+function search(anchor: Anchor, root: ParentNode): HTMLElement | null {
+  const here = findIn(anchor, root);
+  if (here) return here;
+  for (const f of root.querySelectorAll("iframe, frame")) {
+    const doc = visible(f) ? frameDocument(f) : null;
+    const there = doc && search(anchor, doc);
+    if (there) return there;
+  }
+  return null;
+}
+
+function findIn(anchor: Anchor, scope: ParentNode): HTMLElement | null {
   if ("section" in anchor) {
     const want = anchor.section.toLowerCase();
     return [...scope.querySelectorAll("section")].find((s): s is HTMLElement => sectionName(s).toLowerCase() === want && visible(s)) ?? null;
@@ -107,13 +140,56 @@ export function waitForAnchor(anchor: Anchor, timeout = 6000, signal?: AbortSign
   });
 }
 
-// scrollerOf is the nearest ancestor of e that scrolls, or null where the page itself does.
-export function scrollerOf(e: Element): HTMLElement | null {
-  for (let p = e.parentElement; p; p = p.parentElement) {
-    const { overflowY } = getComputedStyle(p);
-    if ((overflowY === "auto" || overflowY === "scroll") && p.scrollHeight > p.clientHeight) return p;
+// scrollerOf is the nearest ancestor of e that scrolls, or null where the page itself does. Out of
+// a frame's page that doesn't scroll, it goes on from the frame.
+export function scrollerOf(e: Element, top: Window = window): HTMLElement | null {
+  for (let at: Element | null = e; at; ) {
+    const win: Window | null = at.ownerDocument.defaultView;
+    for (let p = at.parentElement; p; p = p.parentElement) {
+      const { overflowY } = (win ?? window).getComputedStyle(p);
+      if ((overflowY === "auto" || overflowY === "scroll") && p.scrollHeight > p.clientHeight) return p;
+    }
+    if (!win || win === top) return null;
+    const page = at.ownerDocument.scrollingElement as HTMLElement | null;
+    if (page && page.scrollHeight > page.clientHeight) return page;
+    at = win.frameElement;
   }
   return null;
+}
+
+// screenBox is where e is in top's window, through the same-origin frames it is in, cut to what
+// each frame shows of it; null where none of it shows.
+export function screenBox(e: Element, top: Window = window): Box | null {
+  const r = e.getBoundingClientRect();
+  let box: Box | null = { left: r.left, top: r.top, width: r.width, height: r.height };
+  for (let win: Window | null = e.ownerDocument.defaultView; box && win && win !== top && win.frameElement; ) {
+    const frame = win.frameElement as HTMLElement;
+    const style = (frame.ownerDocument.defaultView ?? window).getComputedStyle(frame);
+    const px = (v: string) => parseFloat(v) || 0;
+    const f = frame.getBoundingClientRect();
+    const left = f.left + frame.clientLeft + px(style.paddingLeft);
+    const at = f.top + frame.clientTop + px(style.paddingTop);
+    const view = {
+      left,
+      top: at,
+      width: frame.clientWidth - px(style.paddingLeft) - px(style.paddingRight),
+      height: frame.clientHeight - px(style.paddingTop) - px(style.paddingBottom),
+    };
+    box = visibleBox({ ...box, left: box.left + left, top: box.top + at }, view);
+    win = frame.ownerDocument.defaultView;
+  }
+  return box;
+}
+
+// windowsOf is win and the window of every same-origin frame in it, a viewer's clicks and keys
+// in any of them being on the one page.
+export function windowsOf(win: Window): Window[] {
+  const out = [win];
+  for (const f of win.document.querySelectorAll("iframe, frame")) {
+    const doc = frameDocument(f);
+    if (doc?.defaultView) out.push(...windowsOf(doc.defaultView));
+  }
+  return out;
 }
 
 // sameRoute is whether the router is at to, the query's order and encoding aside: a step's page,

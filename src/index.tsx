@@ -7,11 +7,12 @@ import type { Chapter, TourRouter } from "./steps.js";
 import { LIGHT, SHADOW } from "./styles.js";
 import { DemoTour, type TourText } from "./tour.js";
 
-export { describeAnchor, findAnchor, findSection, sameRoute, sectionName, waitForAnchor, type Anchor } from "./anchor.js";
+export { describeAnchor, findAnchor, findSection, sameRoute, screenBox, sectionName, waitForAnchor, windowsOf, type Anchor } from "./anchor.js";
 export { CONFIG_ID, readConfig, type DemoConfig } from "./config.js";
 export { place, visibleBox, type Box, type Placement, type Side } from "./place.js";
 export {
   answer,
+  bodyHash,
   bytes,
   DEMO_ORIGIN,
   downloadName,
@@ -26,6 +27,7 @@ export {
   recordingKey,
   recordingKeyOf,
   replayXHR,
+  type BodyRead,
   type Handler,
   type Recorded,
   type Recording,
@@ -125,6 +127,11 @@ export type StartOptions = {
   render: (mount: HTMLElement, recording: Recording) => void;
 };
 
+// FrameReplay is what startDemo leaves on the page for its same-origin frames: a frame of the
+// app's that reads its API (a srcdoc, an embedded dashboard built into the page) has its first
+// script call parent.demoKitReplay?.(window), so its reads are answered from the recording too.
+export type FrameReplay = { demoKitReplay?: (win: Window) => void };
+
 // startDemo is a demo page's whole start: it reads the recording the page carries, answers the
 // app's API from it, frames the page with the tour, and renders the app in the frame. A page that
 // can't start says why, in place of the app.
@@ -132,6 +139,7 @@ export async function startDemo(options: StartOptions): Promise<void> {
   try {
     const recording = await readRecording();
     installReplay(recording, options.replay);
+    (window as FrameReplay).demoKitReplay = (win) => installReplay(recording, options.replay, win as Window & typeof globalThis);
     const mount = mountDemo(options.tour(recording));
     options.render(mount, recording);
   } catch (err) {

@@ -34,6 +34,8 @@ In order of preference:
 
 Any form takes `in: <anchor>` to look only inside another: `{ text: "Site", in: { section: "Estate map" } }`. Only elements on screen are found, so a hidden duplicate is passed over.
 
+What the page itself doesn't hold is looked for in its same-origin frames (an embedded dashboard, a `srcdoc` preview), so an anchor names a chart in a frame as it names one on the page. An `in` that names the frame looks only in it: `{ section: "Total Volume", in: { selector: "iframe[title='Insights']" } }`. The card, the dim and click steps work across the frame's edge; a cross-origin frame's inside is never found.
+
 ## Figures
 
 ```ts
@@ -43,14 +45,21 @@ body: overview ? `${n(overview.delayed)} delayed â€¦` : "The delayed shipments â
 
 `readJSON` finds a read however its path's query is ordered or encoded. Pick what a step features from the data (the first delayed shipment, the worst port), so the tour follows the recording.
 
+A POST that reads is found by the body the app sends, its keys in any order:
+
+```ts
+const byPort = readJSON<Rows>(recording, "/api/query", { method: "POST", body: JSON.stringify({ measure: "delayed", by: "port" }) });
+```
+
 ## startDemo
 
 ```ts
 startDemo({
   replay: {
     handlers: [(req, url) => (url.pathname === "/api/sign-in" ? json(200, { ok: true }) : undefined)],
-    fallbacks: [],          // answer a GET the recording lacks, such as a list in another sort order
+    fallbacks: [],          // answer a read the recording lacks, such as a list in another sort order
     origins: [],            // other origins the app calls as its own API
+    reads: [],              // POSTs that read, as record --read names them; a path the recording holds POST reads for reads already
   },
   tour: (recording) => ({
     chapters: chapters(recording),
@@ -65,6 +74,14 @@ startDemo({
 ```
 
 `mount` is the element under the demo bar; the app's fixed elements sit in it. The tour is drawn in a shadow root, so the app's CSS can't reach it, and its anchors never match the tour's own elements.
+
+`startDemo` leaves `demoKitReplay` on the page for its same-origin frames. A frame that reads the API (a `srcdoc` the app writes, or a second build such as an embedded dashboard given to its frame as `srcdoc`) has as its first script:
+
+```html
+<script>parent.demoKitReplay?.(window)</script>
+```
+
+Its fetch and XMLHttpRequest are then answered from the recording as the page's are. In the dev build `demoKitReplay` isn't there, and the frame reads through the dev server as the app does.
 
 ## Colours
 

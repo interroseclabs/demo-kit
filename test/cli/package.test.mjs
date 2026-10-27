@@ -99,3 +99,9 @@ test("emailsIn passes the domains reserved for examples", () => {
   );
   assert.deepEqual([...found].map(([d, f]) => [d, f.n]), [["real.io", 2]]);
 });
+
+test("keys a POST that reads as the replay looks it up, by its URL and its body's hash", () => {
+  const keyed = rekey({ "POST /api/query?b=2&a=in%20transit 00f3a1b2c3d4e5": { type: "application/json", body: "{}", status: 201 } });
+  assert.deepEqual(Object.keys(keyed), ["POST /api/query?a=in transit&b=2 00f3a1b2c3d4e5"]);
+  assert.equal(keyed["POST /api/query?a=in transit&b=2 00f3a1b2c3d4e5"].status, 201);
+});

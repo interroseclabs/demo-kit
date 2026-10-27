@@ -17,6 +17,10 @@ export function chapters(recording: Recording): Chapter[] {
   const delayed = readJSON<{ shipments: Shipment[] }>(recording, "/api/shipments?status=delayed")?.shipments ?? [];
   const first = delayed[0];
   const worst = overview?.delays_by_port[0];
+  // The report preview's reads, POSTs of a query, as the preview sends them.
+  const query = (by: string) => readJSON<{ rows: { name: string; count: number }[] }>(recording, "/api/query", { method: "POST", body: JSON.stringify({ measure: "delayed", by }) })?.rows[0];
+  const byPort = query("port");
+  const byCarrier = query("carrier");
 
   return [
     {
@@ -89,6 +93,22 @@ export function chapters(recording: Recording): Chapter[] {
           body: "The weekly operations report and the delays report, each a PDF that downloads here.",
           to: "/reports",
           anchor: { section: "Issued reports" },
+        },
+        {
+          id: "preview",
+          title: "The delays report, before it's issued",
+          body: byPort ? `${byPort.name} has the most delayed shipments arriving: ${n(byPort.count)}.` : "The delayed shipments by the port they arrive at.",
+          to: "/reports",
+          anchor: { section: "Preview: delays by port" },
+          click: { on: { text: "By carrier" }, hint: "Click By carrier." },
+        },
+        {
+          id: "preview-carrier",
+          title: "The same delays, by carrier",
+          body: byCarrier ? `${byCarrier.name} carries the most of them: ${n(byCarrier.count)}.` : "The delayed shipments by the carrier that carries them.",
+          to: "/reports",
+          anchor: { section: "Preview: delays by carrier" },
+          needs: { open: { section: "Preview: delays by carrier" }, by: { text: "By carrier" } },
         },
       ],
     },

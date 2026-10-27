@@ -10,6 +10,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { DEMO_ORIGIN, recordingKey, recordingKeyOf } from "../../dist/replay.js";
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const app = join(root, "examples/sample-spa");
 const out = join(root, "test/e2e/out");
@@ -67,6 +69,9 @@ try {
     `127.0.0.1:${REC}`,
     "--header",
     "Authorization: Bearer dev-token",
+    // The report preview's query, a POST that reads.
+    "--read",
+    "POST /api/query",
   ]);
   await up(`http://127.0.0.1:${REC}/`);
   start("vite", process.execPath, [join(app, "node_modules/vite/bin/vite.js"), "--port", String(DEV), "--strictPort"], {
@@ -127,6 +132,23 @@ try {
   if (shortCheck.status !== 1) throw new Error(`check passed a page missing a read:\n${shortCheck.stdout}`);
   if (readFileSync(join(out, "short-misses.txt"), "utf8").trim() !== "/api/reports  [/api/reports]") throw new Error("check didn't name the missing read");
   console.log("ok   check fails a page missing a read, and names it");
+
+  // So does a page missing a POST that reads, in the report preview's frame, named with its body
+  // for demo-kit fetch to send.
+  const carrier = JSON.stringify({ measure: "delayed", by: "carrier" });
+  const carrierKey = recordingKey(new URL("/api/query", DEMO_ORIGIN), { method: "POST", body: carrier });
+  const noCarrier = JSON.parse(readFileSync(recording, "utf8"));
+  const raw = Object.keys(noCarrier).find((k) => recordingKeyOf(k) === carrierKey);
+  if (!raw) throw new Error("the recording holds no read of the preview By carrier");
+  delete noCarrier[raw];
+  writeFileSync(join(out, "no-carrier.json"), JSON.stringify(noCarrier));
+  run("package", ["package", "--recording", join(out, "no-carrier.json"), "--build", join(out, "dist-demo"), "--out", join(out, "no-carrier.html"), "--replace", "dana.ops@lakeside.example=demo@harbor.example"]);
+  console.log("\n$ demo-kit check no-carrier.html (which must fail)");
+  const carrierCheck = spawnSync(process.execPath, [kit, "check", join(out, "no-carrier.html"), "--routes", "demo/routes.txt", "--misses", join(out, "no-carrier-misses.txt")], { cwd: app, encoding: "utf8" });
+  if (carrierCheck.status !== 1) throw new Error(`check passed a page missing a POST read:\n${carrierCheck.stdout}`);
+  const named = readFileSync(join(out, "no-carrier-misses.txt"), "utf8").trim();
+  if (named !== `${carrierKey}  [POST /api/query ${carrier}]`) throw new Error(`check didn't name the missing POST read: ${named}`);
+  console.log("ok   check fails a page missing a POST that reads, and names it with its body");
   console.log("\nend to end: ok");
 } catch (e) {
   failed = true;

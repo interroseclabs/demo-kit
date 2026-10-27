@@ -6,6 +6,7 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { passes, startRecorder } from "../../cli/record.mjs";
+import { bodyHash } from "../../dist/replay.js";
 
 let upstream;
 let seen = [];
@@ -23,8 +24,22 @@ before(async () => {
       return res.end('{"error":"gone"}');
     }
     if (req.method === "POST") {
-      res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "s=1" });
-      return res.end('{"signed_in":true}');
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        seen.at(-1).body = body;
+        if (req.url === "/api/links") {
+          res.writeHead(201, { "Content-Type": "application/json" });
+          return res.end('{"key":"k1"}');
+        }
+        if (req.url.startsWith("/api/query")) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ asked: JSON.parse(body) }));
+        }
+        res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "s=1" });
+        res.end('{"signed_in":true}');
+      });
+      return;
     }
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ url: req.url }));
@@ -81,6 +96,34 @@ test("adds to a recording that exists", async () => {
   await (await fetch(`http://${listen}/api/new`)).text();
   await rec.close();
   assert.deepEqual(Object.keys(JSON.parse(readFileSync(recording, "utf8"))), ["/api/new", "/api/old"]);
+});
+
+test("keeps a POST that reads by its body, with the status it answered, and still refuses any other", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "rec-"));
+  const recording = join(dir, "r.json");
+  const listen = `127.0.0.1:${port()}`;
+  const rec = await startRecorder({
+    upstream: `http://127.0.0.1:${upstream.address().port}`,
+    recording,
+    listen,
+    reads: ["POST /api/query", "POST /api/links"],
+    log: () => {},
+  });
+  seen = [];
+  const via = `http://${listen}`;
+  const body = '{"measure":"delayed","by":"port"}';
+  const read = await fetch(`${via}/api/query?b=2&a=1`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+  assert.deepEqual(await read.json(), { asked: { measure: "delayed", by: "port" } });
+  assert.equal((await fetch(`${via}/api/links`, { method: "POST", body: "{}" })).status, 201);
+  assert.equal((await fetch(`${via}/api/shipments`, { method: "POST", body: "{}" })).status, 403);
+  await rec.close();
+
+  assert.equal(seen[0].body, body, "the install got the body as sent");
+  assert.ok(!seen.some((s) => s.url === "/api/shipments"), "a change still never reaches the install");
+  const kept = JSON.parse(readFileSync(recording, "utf8"));
+  assert.deepEqual(Object.keys(kept).sort(), [`POST /api/links ${bodyHash("{}")}`, `POST /api/query?b=2&a=1 ${bodyHash(body)}`]);
+  assert.equal(kept[`POST /api/links ${bodyHash("{}")}`].status, 201);
+  assert.equal(kept[`POST /api/query?b=2&a=1 ${bodyHash(body)}`].status, undefined);
 });
 
 test("passes names a method and a path prefix", () => {

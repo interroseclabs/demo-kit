@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { describeAnchor, findAnchor, sameRoute, sectionName } from "../../src/anchor";
+import { describeAnchor, findAnchor, sameRoute, screenBox, sectionName, windowsOf } from "../../src/anchor";
+import { drawFrame, sizeOf } from "./setup";
 
 function page(html: string) {
   document.body.innerHTML = html;
@@ -63,6 +64,79 @@ describe("findAnchor", () => {
   it("finds by a selector, as a last resort", () => {
     page(`<table><tr class="row" id="r1"></tr></table>`);
     expect(findAnchor({ selector: "tr.row" })?.id).toBe("r1");
+  });
+});
+
+// framed puts a same-origin frame on the page at box, holding html, laid out as the page is.
+function framed(html: string, box = { left: 200, top: 300, width: 400, height: 300 }, title = "Preview") {
+  const frame = document.createElement("iframe");
+  frame.title = title;
+  document.body.append(frame);
+  sizeOf(frame, box);
+  Object.defineProperty(frame, "clientWidth", { value: box.width });
+  Object.defineProperty(frame, "clientHeight", { value: box.height });
+  drawFrame(frame.contentWindow!);
+  const doc = frame.contentDocument!;
+  doc.body.innerHTML = html;
+  return { frame, doc };
+}
+
+describe("an anchor inside a same-origin frame", () => {
+  it("is found there when the page itself holds none, the page's own first", () => {
+    page(`<p>The page</p>`);
+    const { doc } = framed(`<section aria-label="Delays by carrier" id="in"></section><button id="b">By port</button>`);
+    expect(findAnchor({ section: "delays by carrier" })).toBe(doc.getElementById("in"));
+    document.body.insertAdjacentHTML("afterbegin", `<button id="top">By port</button>`);
+    expect(findAnchor({ text: "By port" })?.id).toBe("top");
+  });
+
+  it("is found in the frame an `in` names, and in a frame within a frame", () => {
+    page(``);
+    framed(`<button id="a">Run</button>`, undefined, "Other");
+    const { doc } = framed(`<button id="b">Run</button>`);
+    expect(findAnchor({ text: "Run", in: { selector: "iframe[title=Preview]" } })).toBe(doc.getElementById("b"));
+
+    const inner = doc.createElement("iframe");
+    doc.body.append(inner);
+    sizeOf(inner, { left: 0, top: 0, width: 100, height: 100 });
+    drawFrame(inner.contentWindow!);
+    inner.contentDocument!.body.innerHTML = `<a aria-label="Deep" id="deep">x</a>`;
+    expect(findAnchor({ label: "Deep" })).toBe(inner.contentDocument!.getElementById("deep"));
+  });
+
+  it("isn't found in a frame that isn't drawn", () => {
+    page(``);
+    const { frame } = framed(`<button>Run</button>`);
+    frame.hidden = true;
+    expect(findAnchor({ text: "Run" })).toBeNull();
+  });
+});
+
+describe("screenBox", () => {
+  it("is where an element is in the page's window, through the frames it is in, cut to them", () => {
+    page(``);
+    const { doc } = framed(`<button id="b">Run</button>`);
+    const b = doc.getElementById("b")!;
+    sizeOf(b, { left: 10, top: 20, width: 80, height: 30 });
+    expect(screenBox(b)).toEqual({ left: 210, top: 320, width: 80, height: 30 });
+    sizeOf(b, { left: 380, top: 20, width: 80, height: 30 });
+    expect(screenBox(b)).toEqual({ left: 580, top: 320, width: 20, height: 30 });
+    sizeOf(b, { left: 500, top: 20, width: 80, height: 30 });
+    expect(screenBox(b)).toBeNull();
+  });
+
+  it("is an element's own box on the page", () => {
+    page(`<button id="b">Run</button>`);
+    sizeOf(document.getElementById("b")!, { left: 5, top: 6, width: 7, height: 8 });
+    expect(screenBox(document.getElementById("b")!)).toEqual({ left: 5, top: 6, width: 7, height: 8 });
+  });
+});
+
+describe("windowsOf", () => {
+  it("is a window and every same-origin frame's in it", () => {
+    page(``);
+    const { frame } = framed(`<p>x</p>`);
+    expect(windowsOf(window)).toEqual([window, frame.contentWindow]);
   });
 });
 

@@ -11,7 +11,7 @@ It came out of qSIGHT's offline demo, and it is the same engine, so every team's
 
 ## Does it fit your app?
 
-It does when your app is drawn in the browser from JSON it reads over HTTP GET: React, Vue or Angular with a client-side router, built with Vite (or a bundler you can set to one chunk). It doesn't when pages come as server-rendered HTML (Next.js server components, Rails or Django templates), when reads are POSTs (GraphQL), or when the data arrives over a WebSocket. Those need a snapshot capture instead.
+It does when your app is drawn in the browser from JSON it reads over HTTP GET, or by POSTs to paths that only read (a dashboard's chart queries, a search), which are recorded by their body: React, Vue or Angular with a client-side router, built with Vite (or a bundler you can set to one chunk). A frame of the app's own origin, such as an embedded dashboard built into the page, is part of the demo: the tour points into it and it reads from the recording too. It doesn't fit when pages come as server-rendered HTML (Next.js server components, Rails or Django templates), when reads and writes share one POST path (GraphQL), or when the data arrives over a WebSocket. Those need a snapshot capture instead.
 
 ## Before you start
 

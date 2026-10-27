@@ -1,5 +1,6 @@
 import type { Report } from "../api";
 import { useRead } from "../use";
+import { PREVIEW } from "./preview";
 
 export function Reports() {
   const { data, error } = useRead<{ reports: Report[] }>("/api/reports");
@@ -19,6 +20,9 @@ export function Reports() {
           ))}
         </ul>
       </section>
+      <div className="card preview">
+        <iframe title="Delays report preview" srcDoc={PREVIEW} />
+      </div>
     </>
   );
 }

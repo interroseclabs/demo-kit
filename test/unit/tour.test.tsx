@@ -1,8 +1,9 @@
+import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
-import { mountDemo, type Chapter, type DemoOptions } from "../../src/index";
+import { mountDemo, RECORDING_ID, startDemo, type Chapter, type DemoOptions, type FrameReplay } from "../../src/index";
 import { CONFIG_ID } from "../../src/config";
-import { sizeOf } from "./setup";
+import { drawFrame, sizeOf } from "./setup";
 
 const chapters: Chapter[] = [
   {
@@ -113,6 +114,44 @@ describe("mountDemo", () => {
     stop();
   });
 
+  it("points at what a same-origin frame on the page holds, and goes on when the viewer clicks in it", async () => {
+    const framedChapters: Chapter[] = [
+      {
+        title: "Preview",
+        blurb: "In a frame",
+        steps: [
+          { id: "port", title: "By port", body: "x", to: "/reports", anchor: { section: "Delays by port" }, click: { on: { text: "By carrier" }, hint: "Click By carrier." } },
+          { id: "carrier", title: "By carrier", body: "y", to: "/reports", anchor: { section: "Delays by carrier" } },
+        ],
+      },
+    ];
+    const mount = mountDemo({ chapters: framedChapters, text });
+    const frame = document.createElement("iframe");
+    mount.append(frame);
+    sizeOf(frame, { left: 0, top: 44, width: 800, height: 600 });
+    Object.defineProperty(frame, "clientWidth", { value: 800 });
+    Object.defineProperty(frame, "clientHeight", { value: 600 });
+    drawFrame(frame.contentWindow!);
+    const doc = frame.contentDocument!;
+    doc.body.innerHTML = `<section aria-label="Delays by port"><button>By carrier</button></section>`;
+    sizeOf(doc.querySelector("section")!, { left: 20, top: 30, width: 300, height: 100 });
+    doc.querySelector("button")!.addEventListener("click", () => {
+      doc.body.innerHTML = `<section aria-label="Delays by carrier"></section>`;
+    });
+
+    q('[data-gd="start"]')!.click();
+    let card = await until(() => q('[data-gd="card"]'));
+    expect(card.dataset.gdAnchor).toBe("found");
+    expect(card.dataset.gdClick).toBe("found");
+    // The hole is where the section is in the page's window: the frame's place plus its own.
+    const hole = await until(() => q(".gd-hole"));
+    expect([hole.style.left, hole.style.top]).toEqual(["14px", `${74 - 6 - 44}px`]);
+
+    doc.querySelector("button")!.click();
+    card = await until(() => (q('[data-gd="card"]')?.dataset.gdStep === "carrier" ? q('[data-gd="card"]') : null));
+    expect(card.dataset.gdAnchor).toBe("found");
+  });
+
   it("says when a step's element isn't on the page, for the checker", async () => {
     const stop = app(mountDemo({ chapters: [{ title: "C", blurb: "b", steps: [{ id: "x", title: "X", body: "x", to: "/overview", anchor: { section: "Nowhere" } }] }], text }));
     q('[data-gd="start"]')!.click();
@@ -143,5 +182,25 @@ describe("mountDemo", () => {
     expect(q('nav[aria-label="Tour chapters"]')).not.toBeNull();
     document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     await until(() => (q('nav[aria-label="Tour chapters"]') ? null : true));
+  });
+});
+
+describe("startDemo", () => {
+  it("answers the page's API from its recording, and a same-origin frame's when its first script asks", async () => {
+    const recording = { "/api/me": { type: "application/json", body: '{"name":"Demo"}' } };
+    const data = gzipSync(Buffer.from(JSON.stringify(recording))).toString("base64");
+    document.body.innerHTML = `<script type="application/octet-stream" id="${RECORDING_ID}">${data}</script>`;
+    let mount: HTMLElement | null = null;
+    await startDemo({ tour: () => ({ chapters, text }), render: (m) => (mount = m) });
+    expect(mount).not.toBeNull();
+    expect(await (await fetch("/api/me")).json()).toEqual({ name: "Demo" });
+
+    const frame = document.createElement("iframe");
+    document.body.append(frame);
+    const win = frame.contentWindow! as Window & typeof globalThis;
+    win.fetch = (async () => new Response("native")) as typeof fetch;
+    // A frame's script calls it as parent.demoKitReplay; under jsdom the test's window is a copy.
+    (window as FrameReplay).demoKitReplay?.(win);
+    expect(await (await win.fetch("/api/me")).json()).toEqual({ name: "Demo" });
   });
 });
