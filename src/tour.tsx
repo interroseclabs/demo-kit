@@ -94,6 +94,18 @@ const sameBox = (a: Box | null, b: Box | null) =>
   a === b ||
   (!!a && !!b && Math.abs(a.left - b.left) < 0.5 && Math.abs(a.top - b.top) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5);
 
+// onPage is whether e is on the page still: in it, and in frames that are. A frame that loads
+// another page leaves its earlier one's elements connected to that page, which no longer shows.
+function onPage(e: Element): boolean {
+  if (!e.isConnected) return false;
+  for (let doc = e.ownerDocument; doc !== document; ) {
+    const frame = doc.defaultView?.frameElement;
+    if (!frame?.isConnected) return false;
+    doc = frame.ownerDocument;
+  }
+  return true;
+}
+
 // useBox is where on screen anchor's element is, each frame, found again if the page redraws it,
 // through any frame it is in.
 function useBox(anchor: Anchor | undefined, found: HTMLElement | null): Box | null {
@@ -105,8 +117,8 @@ function useBox(anchor: Anchor | undefined, found: HTMLElement | null): Box | nu
     let frame = 0;
     let raf = 0;
     const tick = () => {
-      if ((!el || !el.isConnected) && anchor && frame++ % 10 === 0) el = findAnchor(anchor);
-      const r = el?.isConnected ? screenBox(el) : null;
+      if ((!el || !onPage(el)) && anchor && frame++ % 10 === 0) el = findAnchor(anchor);
+      const r = el && onPage(el) ? screenBox(el) : null;
       const next = r && r.width > 0 ? r : null;
       setBox((prev) => (sameBox(prev, next) ? prev : next));
       raf = requestAnimationFrame(tick);

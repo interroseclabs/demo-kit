@@ -152,6 +152,44 @@ describe("mountDemo", () => {
     expect(card.dataset.gdAnchor).toBe("found");
   });
 
+  it("finds a step's element again when its frame's page is replaced by the next one", async () => {
+    // Two steps point at a dialog, each on its own page: the page swaps its frame for the next
+    // one's a moment after the route changes, so the next step first finds the outgoing dialog.
+    const dialogs: Chapter[] = [
+      {
+        title: "Dialogs",
+        blurb: "Two",
+        steps: [
+          { id: "one", title: "One", body: "x", to: "/one", anchor: { section: "Dialog" } },
+          { id: "two", title: "Two", body: "y", to: "/two", anchor: { section: "Dialog" } },
+        ],
+      },
+    ];
+    const mount = mountDemo({ chapters: dialogs, text });
+    const page = (at: { left: number; top: number }) => {
+      mount.querySelector("iframe")?.remove();
+      const frame = document.createElement("iframe");
+      mount.append(frame);
+      sizeOf(frame, { left: 0, top: 44, width: 800, height: 600 });
+      Object.defineProperty(frame, "clientWidth", { value: 800 });
+      Object.defineProperty(frame, "clientHeight", { value: 600 });
+      drawFrame(frame.contentWindow!);
+      frame.contentDocument!.body.innerHTML = `<section aria-label="Dialog"></section>`;
+      sizeOf(frame.contentDocument!.querySelector("section")!, { ...at, width: 300, height: 100 });
+    };
+    page({ left: 20, top: 30 });
+    const swap = () => location.hash.startsWith("#/two") && setTimeout(() => page({ left: 200, top: 300 }), 300);
+    window.addEventListener("hashchange", swap);
+
+    q('[data-gd="start"]')!.click();
+    await until(() => q(".gd-hole"));
+    q('[data-gd="next"]')!.click();
+    // The hole is over the incoming dialog, not lost with the outgoing one.
+    const hole = await until(() => (q(".gd-hole")?.style.left === "194px" ? q(".gd-hole") : null));
+    expect(hole.style.top).toBe(`${344 - 6 - 44}px`);
+    window.removeEventListener("hashchange", swap);
+  });
+
   it("says when a step's element isn't on the page, for the checker", async () => {
     const stop = app(mountDemo({ chapters: [{ title: "C", blurb: "b", steps: [{ id: "x", title: "X", body: "x", to: "/overview", anchor: { section: "Nowhere" } }] }], text }));
     q('[data-gd="start"]')!.click();
