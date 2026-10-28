@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // The kit end to end, on the sample SPA: its API, the recorder in front of it, Vite's dev server
 // pointed at the recorder, every route visited, the crawl's paths fetched, the demo built and
-// packaged, and the page checked as a viewer opens it. It fails where any step does.
+// packaged, the page checked as a viewer opens it, and its tour filmed for a website. It fails
+// where any step does.
 //
-//   npm run e2e          (CHROME names the browser; KEEP=1 keeps test/e2e/out)
+//   npm run e2e          (CHROME names the browser; KEEP=1 keeps test/e2e/out, the film in out/film)
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -48,6 +49,44 @@ async function up(url) {
     }
   }
   throw new Error(`nothing answered at ${url}`);
+}
+
+// filmed films the page's tour, quickly, and holds what it writes to the tour: a video of the
+// whole tour and of each chapter in every encode, timings.json naming every step in order, the
+// reference module with nothing left to fill in, and the 16:9 film.
+function filmed(page, dir) {
+  run("film", ["film", page, "--out", dir, "--quick", "--wide", "--name", "harbor"]);
+  const probe = (f) => {
+    const r = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v", "-show_entries", "stream=width,height:format=duration", "-of", "json", f], { encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`film wrote no video at ${f}`);
+    const j = JSON.parse(r.stdout);
+    return { width: j.streams[0].width, height: j.streams[0].height, duration: +j.format.duration };
+  };
+  const site = join(dir, "website");
+  const timings = JSON.parse(readFileSync(join(site, "timings.json"), "utf8"));
+  const names = ["harbor-walkthrough", "harbor-chapter-1-the-overview", "harbor-chapter-2-find-the-late-ones", "harbor-chapter-3-the-paperwork"];
+  if (JSON.stringify(Object.keys(timings.videos)) !== JSON.stringify(names)) throw new Error(`film cut ${Object.keys(timings.videos).join(", ")}`);
+  for (const name of names) {
+    const v = timings.videos[name];
+    for (const [suffix, w, h] of [["-1920x960.mp4", 1920, 960], ["-1280x640.mp4", 1280, 640], ["-1920x960.webm", 1920, 960]]) {
+      const got = probe(join(site, name + suffix));
+      if (got.width !== w || got.height !== h || Math.abs(got.duration - v.duration) > 0.1) throw new Error(`${name}${suffix} is ${got.width}x${got.height}, ${got.duration}s; timings.json says ${v.duration}s`);
+    }
+    for (const suffix of ["-poster.jpg", ".vtt"]) if (!existsSync(join(site, name + suffix))) throw new Error(`film wrote no ${name}${suffix}`);
+    if (v.steps.some((s, i) => !(s.at > s.start) || (i > 0 && !(s.start > v.steps[i - 1].start)) || s.at > v.duration)) throw new Error(`${name}'s steps are out of order: ${JSON.stringify(v.steps)}`);
+  }
+  const whole = timings.videos["harbor-walkthrough"];
+  const ids = ["figures", "delays", "delayed-figure", "delayed-list", "shipment", "document", "reports", "preview", "preview-carrier"];
+  if (JSON.stringify(whole.steps.map((s) => s.id)) !== JSON.stringify(ids)) throw new Error(`the walkthrough's steps are ${whole.steps.map((s) => s.id).join(", ")}`);
+  if (whole.steps[0].label !== "Figures") throw new Error(`a step's film.label isn't its label on the module: ${whole.steps[0].label}`);
+  // Reports is reached by its menu, a pass shot before its own.
+  const reports = whole.steps.find((s) => s.id === "reports");
+  if (!(reports.at - reports.start > 3)) throw new Error(`reports' film.via made no shot: ${JSON.stringify(reports)}`);
+  const embed = readFileSync(join(site, "embed-example.html"), "utf8");
+  if (/__[A-Z]+__/.test(embed) || !embed.includes('"harbor-chapter-1-the-overview"')) throw new Error("the reference module isn't filled in");
+  const wide = probe(join(dir, "film", "harbor-film-1920x1080.mp4"));
+  if (wide.width !== 1920 || wide.height !== 1080 || wide.duration < whole.duration) throw new Error(`the 16:9 film is ${wide.width}x${wide.height}, ${wide.duration}s`);
+  console.log(`ok   film cut the tour, ${whole.duration}s, its chapters and the 16:9 film, ${wide.duration.toFixed(1)}s`);
 }
 
 let failed = false;
@@ -121,6 +160,7 @@ try {
     "dana.ops@lakeside.example=demo@harbor.example",
   ]);
   run("check", ["check", join(out, "harbor-demo.html"), "--routes", "demo/routes.txt", "--misses", join(out, "misses.txt")]);
+  filmed(join(out, "harbor-demo.html"), join(out, "film"));
 
   // A page missing a read fails, and names the read for demo-kit fetch.
   const short = JSON.parse(readFileSync(recording, "utf8"));

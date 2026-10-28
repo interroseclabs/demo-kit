@@ -65,7 +65,7 @@ function save(key: string, v: Saved) {
 // ── The page under the tour ───────────────────────────────────────────────────────
 
 // press is a viewer's click, or double-click, on e, in the window e is in: a frame's, maybe.
-function press(e: HTMLElement, double?: boolean) {
+export function press(e: HTMLElement, double?: boolean) {
   const view = e.ownerDocument.defaultView ?? window;
   if (double) e.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view }));
   else e.click();
@@ -88,6 +88,20 @@ function shut(open: Anchor) {
       );
     close?.click();
   }, 60);
+}
+
+// enterStep takes the app to a step: its page, what the step before opened shut where this one
+// doesn't need it, and what this one needs opened. It is the step's element once it shows, or
+// null. The tour enters each step by it, and `demo-kit film` too.
+export async function enterStep(router: TourRouter, step: TourStep, before: TourStep | undefined, signal?: AbortSignal): Promise<HTMLElement | null> {
+  if (!sameRoute(router.location(), step.to)) await router.navigate(step.to);
+  else if (before?.needs && JSON.stringify(before.needs) !== JSON.stringify(step.needs)) shut(before.needs.open);
+  if (step.needs && !(await waitForAnchor(step.needs.open, 900, signal))) {
+    const by = await waitForAnchor(step.needs.by, 6000, signal);
+    if (by) press(by, step.needs.double);
+    await waitForAnchor(step.needs.open, 3000, signal);
+  }
+  return step.anchor ? await waitForAnchor(step.anchor, 6000, signal) : null;
 }
 
 const sameBox = (a: Box | null, b: Box | null) =>
@@ -412,14 +426,7 @@ function Guided({
       // A step left by its click lets the click's own navigation land before reading the route.
       await new Promise((r) => setTimeout(r, 120));
       if (signal.aborted) return;
-      if (!sameRoute(router.location(), step.to)) await router.navigate(step.to);
-      else if (before?.needs && JSON.stringify(before.needs) !== JSON.stringify(step.needs)) shut(before.needs.open);
-      if (step.needs && !(await waitForAnchor(step.needs.open, 900, signal))) {
-        const by = await waitForAnchor(step.needs.by, 6000, signal);
-        if (by) press(by, step.needs.double);
-        await waitForAnchor(step.needs.open, 3000, signal);
-      }
-      const el = step.anchor ? await waitForAnchor(step.anchor, 6000, signal) : null;
+      const el = await enterStep(router, step, before, signal);
       if (signal.aborted) return;
       if (el) {
         const tall = el.getBoundingClientRect().height > (window.innerHeight - BAR - bottomInset) * 0.7;

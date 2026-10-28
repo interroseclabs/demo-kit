@@ -1,6 +1,6 @@
 ---
 name: guided-demo
-description: Make an offline guided demo of a single-page app, one HTML file that opens from disk with the real app answering from a recorded API and a Walnut-style tour over it. Use to build a demo of an app, re-record one after the app changes, or package one for a prospect.
+description: Make an offline guided demo of a single-page app, one HTML file that opens from disk with the real app answering from a recorded API and a Walnut-style tour over it. Use to build a demo of an app, re-record one after the app changes, package one for a prospect, or film its tour as video for a website.
 ---
 
 # Guided demo
@@ -9,7 +9,7 @@ A **guided demo** is the app itself, its API answered from a **recording** of a 
 
 The engine, the replay, the recorder and the checker are the `@interroseclabs/demo-kit` package. Install it pinned and use it as installed: every team's demo then looks and behaves the same, and a fix to the kit reaches every demo by a version bump. The app supplies only its glue: a demo entry, its chapters, its routes list, its crawl.
 
-An app with its glue committed (`src/demo/`, `demo/`) already has a demo: re-recording starts at step 5, and packaging for another prospect at step 7.
+An app with its glue committed (`src/demo/`, `demo/`) already has a demo: re-recording starts at step 5, packaging for another prospect at step 7, and filming it for the website at step 9.
 
 Work through the steps in order. Each ends on its **done when** line.
 
@@ -125,6 +125,26 @@ Repeat until the last line reads `the demo is ready to send`. A page that hasn't
 
 **Done when** `demo-kit check` exits 0 with `the demo is ready to send`, and you have read the welcome, the cards and the end screen.
 
-## 9. Hand over
+## 9. Film (when the website needs video)
 
-Stop the recorder, the dev server and the API. Give the user the page's path, its size (over 20 MB won't go as most email attachments; share it as a link), the prospect and the call to action it carries, and the check's last lines. Commit the glue so the next demo of this app starts at step 5: `demo.html`, `vite.demo.config.ts`, `src/demo/`, `demo/routes.txt`, `demo/crawl.mjs`, `.gitignore`, and `package.json` with its lockfile, which hold the kit's pinned version.
+Only when the user asks for a video of the demo, for a home page or a product page. `demo-kit film` films the tour from the checked page, a shot a step, into 2:1 videos (the whole tour and each chapter), their steps' timings, and a reference module that plays them like BigID's "find it, fix it, govern it" reel. `--wide` adds a 16:9 film with title, chapter and closing cards. It needs `ffmpeg`.
+
+Film from a page packaged without `--prospect`: the website's video is for nobody in particular. First the stills, one a shot, to check the framing in a few seconds:
+
+```bash
+npx demo-kit film demo/app-demo.html --out demo/film --stills
+```
+
+Look at every still in `demo/film/stills/`. A shot framed wrong (the card over what it explains, the camera too close or too wide, a step reached in a way a viewer wouldn't) is fixed by the step's `film` hints ([reference.md](reference.md)), then build, package and take the stills again. Then film it, with the brand the user gives you (`--logo`, `--color`, `--font`; copy flags in `npx demo-kit --help`):
+
+```bash
+npx demo-kit film demo/app-demo.html --out demo/film --wide --logo brand/logo-on-dark.svg
+```
+
+Filming is at 2× and 60 fps, a few minutes for a tour of a minute; run it in the background. Add `demo/film/` to `.gitignore`.
+
+**Done when** you have looked at every still, `demo/film/website/` holds each video with `timings.json` and `embed-example.html`, and the embed plays from that folder.
+
+## 10. Hand over
+
+Stop the recorder, the dev server and the API. Give the user the page's path, its size (over 20 MB won't go as most email attachments; share it as a link), the prospect and the call to action it carries, and the check's last lines; and, if you filmed it, the film's folder. Commit the glue so the next demo of this app starts at step 5: `demo.html`, `vite.demo.config.ts`, `src/demo/`, `demo/routes.txt`, `demo/crawl.mjs`, `.gitignore`, and `package.json` with its lockfile, which hold the kit's pinned version.

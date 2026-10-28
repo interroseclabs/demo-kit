@@ -99,3 +99,25 @@ Tokens on `.gd-frame`, set in `src/demo/demo.css` or by `colors` (without the `-
 | `--gd-border` | borders and dividers |
 | `--gd-dim` | the shade over the page around the spotlight |
 | `--gd-font` | the typeface; the app's own by default |
+
+## Film hints
+
+`demo-kit film` films each step as a shot: the camera frames the step's anchor, rings it, puts the card's title and body beside it, then takes the step's click. Its framing is right for most steps; a step's `film` field steers the rest, read from the stills `--stills` writes:
+
+```ts
+film: {
+  label: "Reports",            // the step's name on the website module's step bar; its title by default
+  zoom: 1.3,                   // 1 shows the page's whole width; by default the element fills half the frame, 1 to 1.6
+  center: [720, 450],          // the point the camera centres on, in the page's px at 1440 wide
+  scroll: 280,                 // where the element's scrolling container ends up, in px; by default as the tour scrolls it
+  place: "right",              // the card: below, above, right, left, below-left … above-right, inside-top-left …
+                               // inside-bottom-right, or a frame corner, top-left … bottom-right
+  hold: 4,                     // seconds the card stays; by default as long as its words take to read
+  via: [{ text: "Reports" }],  // clicks shown on the way in, from where the step before left the page
+  skip: true,                  // leave the step out of the film; it is still entered and its click taken
+}
+```
+
+- `via` shows the way a viewer would get there, such as the menu, where the tour's Next goes straight to the step's page. Each anchor is a click of its own, made for real, so the step's page is the one it leads to.
+- Give `label` a word or two: a chapter's labels sit side by side under its video.
+- A chapter is a video of its own, and a tab in the website module: its title and blurb name it there and on the 16:9 film's chapter card.

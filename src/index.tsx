@@ -1,11 +1,12 @@
 import { render } from "preact";
 
+import { describeAnchor, findAnchor, screenBox } from "./anchor.js";
 import { readConfig, type DemoConfig } from "./config.js";
 import { installReplay, readRecording, type Recording, type ReplayOptions } from "./replay.js";
 import { hashRouter } from "./router.js";
 import type { Chapter, TourRouter } from "./steps.js";
 import { LIGHT, SHADOW } from "./styles.js";
-import { DemoTour, type TourText } from "./tour.js";
+import { DemoTour, enterStep, press, type TourText } from "./tour.js";
 
 export { describeAnchor, findAnchor, findSection, sameRoute, screenBox, sectionName, waitForAnchor, windowsOf, type Anchor } from "./anchor.js";
 export { CONFIG_ID, readConfig, type DemoConfig } from "./config.js";
@@ -34,7 +35,7 @@ export {
   type ReplayOptions,
 } from "./replay.js";
 export { hashRouter, whereInHash } from "./router.js";
-export type { Chapter, TourRouter, TourStep, Where } from "./steps.js";
+export type { Chapter, FilmHints, FilmPlace, TourRouter, TourStep, Where } from "./steps.js";
 export type { TourText } from "./tour.js";
 
 export const VERSION = "0.1.1";
@@ -104,7 +105,26 @@ export function mountDemo(options: DemoOptions): HTMLElement {
   const router = options.router ?? hashRouter();
   const steps = options.chapters.flatMap((c, chapter) => c.steps.map((s) => ({ id: s.id, title: s.title, chapter, to: s.to, anchor: Boolean(s.anchor), needs: Boolean(s.needs) })));
   // What `demo-kit check` reads to know the tour it walks.
-  (window as unknown as { __demoKit: unknown }).__demoKit = { version: VERSION, steps, chapters: options.chapters.map((c) => c.title) };
+  const kit = { version: VERSION, steps, chapters: options.chapters.map((c) => c.title) };
+  // What `demo-kit film` drives the page by: the tour in full, and the tour's own ways to enter a
+  // step and to find and click what an anchor names, with the tour itself left closed. Not
+  // enumerable, so the tour as check reads it stays plain data.
+  const tour = options.chapters.flatMap((c) => c.steps);
+  Object.defineProperty(kit, "film", {
+    value: {
+      chapters: options.chapters,
+      text: options.text,
+      enter: (id: string) => {
+        const i = tour.findIndex((s) => s.id === id);
+        return i < 0 ? Promise.reject(new Error(`no step ${id}`)) : enterStep(router, tour[i]!, tour[i - 1]);
+      },
+      find: findAnchor,
+      describe: describeAnchor,
+      box: screenBox,
+      press,
+    },
+  });
+  (window as unknown as { __demoKit: unknown }).__demoKit = kit;
   render(
     <DemoTour
       router={router}
