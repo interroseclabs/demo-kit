@@ -35,6 +35,8 @@ export function chapters(recording: Recording): Chapter[] {
             : "How many shipments are in transit, delayed and delivered, and how many are on time.",
           to: "/overview",
           anchor: { section: "Headline figures" },
+          // The step's name on the website module that demo-kit film cuts its videos for.
+          film: { label: "Figures" },
         },
         {
           id: "delays",
@@ -42,6 +44,7 @@ export function chapters(recording: Recording): Chapter[] {
           body: worst ? `${worst.port} has the most delayed shipments arriving: ${n(worst.delayed)}.` : "The ports with delayed shipments arriving, most first.",
           to: "/overview",
           anchor: { section: "Delays by port" },
+          film: { label: "Delays" },
         },
       ],
     },
@@ -56,6 +59,7 @@ export function chapters(recording: Recording): Chapter[] {
           to: "/overview",
           anchor: { label: "Delayed", starts: true },
           click: { hint: "Click Delayed." },
+          film: { label: "Drill in" },
         },
         {
           id: "delayed-list",
@@ -64,6 +68,7 @@ export function chapters(recording: Recording): Chapter[] {
           to: "/shipments?status=delayed",
           anchor: { section: "Shipments table" },
           click: first ? { on: { text: first.id, starts: true }, hint: `Click ${first.id} to open it.` } : undefined,
+          film: { label: "Delayed" },
         },
         {
           id: "shipment",
@@ -73,6 +78,7 @@ export function chapters(recording: Recording): Chapter[] {
           anchor: first ? { label: `Shipment ${first.id}` } : undefined,
           needs: first ? { open: { label: `Shipment ${first.id}` }, by: { text: first.id, starts: true } } : undefined,
           click: first ? { on: { text: "Open the bill of lading" }, hint: "Click Open the bill of lading." } : undefined,
+          film: { label: "One shipment" },
         },
       ],
     },
@@ -86,6 +92,7 @@ export function chapters(recording: Recording): Chapter[] {
           body: "The shipment's own document, as the carrier issued it, and its PDF to download.",
           to: first ? `/documents/${first.document_id}` : "/reports",
           anchor: { section: "Bill of lading" },
+          film: { label: "Bill of lading" },
         },
         {
           id: "reports",
@@ -93,6 +100,8 @@ export function chapters(recording: Recording): Chapter[] {
           body: "The weekly operations report and the delays report, each a PDF that downloads here.",
           to: "/reports",
           anchor: { section: "Issued reports" },
+          // The film goes there by the menu, as a viewer would, where Next goes straight to it.
+          film: { label: "Reports", via: [{ text: "Reports" }] },
         },
         {
           id: "preview",
@@ -101,6 +110,7 @@ export function chapters(recording: Recording): Chapter[] {
           to: "/reports",
           anchor: { section: "Preview: delays by port" },
           click: { on: { text: "By carrier" }, hint: "Click By carrier." },
+          film: { label: "Preview" },
         },
         {
           id: "preview-carrier",
@@ -109,6 +119,7 @@ export function chapters(recording: Recording): Chapter[] {
           to: "/reports",
           anchor: { section: "Preview: delays by carrier" },
           needs: { open: { section: "Preview: delays by carrier" }, by: { text: "By carrier" } },
+          film: { label: "By carrier" },
         },
       ],
     },

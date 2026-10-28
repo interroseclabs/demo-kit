@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // demo-kit: record a dev install of an app, package the recording with the app's demo build into
-// one HTML page, and check that page as its viewer will open it. README.md has the method.
+// one HTML page, check that page as its viewer will open it, and film its tour for a website.
+// README.md has the method.
 import { parseArgs } from "node:util";
 
 const USAGE = `demo-kit <command> [options]
@@ -22,8 +23,16 @@ const USAGE = `demo-kit <command> [options]
   check    <page.html> [--routes <file>] [--misses <file>]
            Opens the page from a file in headless Chrome, walks the tour, and fails on anything
            a viewer would trip on. A demo isn't sent until this passes.
+  film     <page.html> --out <dir> [--wide] [--quick] [--stills] [--name <file name>]
+           [--color token=value]... [--font <file>] [--logo <file>] [--product <name>]
+           [--tagline <words>] [--closing <words>] [--heading <words>] [--lede <words>]
+           [--contact-url <https:|mailto:>] [--contact-label <words>] [--page-height 900]
+           Films the tour, a shot a step, into 2:1 videos for a website (the whole tour and
+           each chapter) with timings.json and a reference module; --wide adds a 16:9 film
+           with title, chapter and closing cards. --stills writes one still a shot to check
+           the framing; --quick films at 1x and 30 fps. Needs ffmpeg.
 
-CHROME names the browser visit and check use.`;
+CHROME names the browser visit, check and film use.`;
 
 const [command, ...rest] = process.argv.slice(2);
 const options = {
@@ -52,6 +61,19 @@ const options = {
   "allow-domain": { type: "string", multiple: true },
   title: { type: "string" },
   misses: { type: "string" },
+  name: { type: "string" },
+  wide: { type: "boolean" },
+  quick: { type: "boolean" },
+  stills: { type: "boolean" },
+  color: { type: "string", multiple: true },
+  font: { type: "string" },
+  logo: { type: "string" },
+  product: { type: "string" },
+  tagline: { type: "string" },
+  closing: { type: "string" },
+  heading: { type: "string" },
+  lede: { type: "string" },
+  "page-height": { type: "string" },
   help: { type: "boolean", short: "h" },
 };
 
@@ -123,6 +145,32 @@ try {
       const { check } = await import("../cli/check.mjs");
       const r = await check({ page, routes: v.routes, misses: v.misses });
       process.exit(r.ok ? 0 : 1);
+      break;
+    }
+    case "film": {
+      const page = positionals[0];
+      if (!page) fail("film needs the page to film");
+      need(v, "out");
+      const { film } = await import("../cli/film.mjs");
+      await film({
+        page,
+        out: v.out,
+        name: v.name,
+        wide: v.wide,
+        quick: v.quick,
+        stills: v.stills,
+        colors: v.color ?? [],
+        font: v.font,
+        logo: v.logo,
+        product: v.product,
+        tagline: v.tagline,
+        closing: v.closing,
+        heading: v.heading,
+        lede: v.lede,
+        contactUrl: v["contact-url"],
+        contactLabel: v["contact-label"],
+        pageHeight: v["page-height"] === undefined ? undefined : Number(v["page-height"]),
+      });
       break;
     }
     default:

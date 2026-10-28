@@ -114,6 +114,25 @@ describe("mountDemo", () => {
     stop();
   });
 
+  it("leaves demo-kit film the tour in full, and the tour's own way into each step, apart from what check reads", async () => {
+    const filmed: Chapter[] = [{ ...chapters[0]!, steps: [{ ...chapters[0]!.steps[0]!, film: { zoom: 1.2, label: "Figures" } }, chapters[0]!.steps[1]!] }, chapters[1]!];
+    const stop = app(mountDemo({ chapters: filmed, text }));
+    type Film = { chapters: Chapter[]; text: DemoOptions["text"]; enter(id: string): Promise<HTMLElement | null>; describe(a: unknown): string };
+    const kit = (window as unknown as { __demoKit: { film: Film } }).__demoKit;
+    expect(Object.keys(JSON.parse(JSON.stringify(kit)))).toEqual(["version", "steps", "chapters"]);
+    expect(kit.film.chapters[0]!.steps[0]!.film).toEqual({ zoom: 1.2, label: "Figures" });
+    expect(kit.film.text.title).toBe("Harbor interactive demo");
+    expect(kit.film.describe({ section: "Shipments" })).toBe('section "Shipments"');
+
+    // Entered as the tour enters it: its page, then its element, with the tour itself left closed.
+    const el = await kit.film.enter("list");
+    expect(location.hash).toBe("#/shipments");
+    expect(el?.getAttribute("aria-label")).toBe("Shipments");
+    expect(q('[data-gd="welcome"]')).not.toBeNull();
+    await expect(kit.film.enter("nowhere")).rejects.toThrow("no step nowhere");
+    stop();
+  });
+
   it("points at what a same-origin frame on the page holds, and goes on when the viewer clicks in it", async () => {
     const framedChapters: Chapter[] = [
       {
