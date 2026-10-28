@@ -6,12 +6,15 @@ import { parseArgs } from "node:util";
 const USAGE = `demo-kit <command> [options]
 
   record   --upstream <url> --recording <file> [--listen 127.0.0.1:8481] [--prefix /api/]
-           [--header "Name: value"]... [--pass "POST /api/sign-in"]... [--insecure]
-           A proxy in front of a dev install: keeps every GET under --prefix that answers 200.
+           [--header "Name: value"]... [--pass "POST /api/sign-in"]... [--read "POST /api/query"]...
+           [--insecure]
+           A proxy in front of a dev install: keeps every GET under --prefix that answers 200,
+           and each POST that --read names by its body.
   visit    --origin <dev server> --routes <file> [--hash] [--init <script.js>]
            Opens each route in headless Chrome so the recorder keeps each page's reads.
   fetch    --paths <file> [--via http://127.0.0.1:8481]
            Reads each path through the recorder: what a click can ask for, or check's misses.
+           A line "POST /api/query {...}" sends that body.
   package  --recording <file> --build <dir> --out <page.html> [--html demo.html]
            [--prospect <name>] [--contact-url <https:|mailto:>] [--contact-label <words>]
            [--replace FROM=TO]... [--transform <module.mjs>] [--allow-domain <domain>]... [--title <title>]
@@ -30,6 +33,7 @@ const options = {
   prefix: { type: "string" },
   header: { type: "string", multiple: true },
   pass: { type: "string", multiple: true },
+  read: { type: "string", multiple: true },
   insecure: { type: "boolean" },
   origin: { type: "string" },
   routes: { type: "string" },
@@ -79,7 +83,7 @@ try {
     case "record": {
       need(v, "upstream", "recording");
       const { record } = await import("../cli/record.mjs");
-      await record({ upstream: v.upstream, recording: v.recording, listen: v.listen, prefix: v.prefix, headers: v.header ?? [], pass: v.pass ?? [], insecure: v.insecure });
+      await record({ upstream: v.upstream, recording: v.recording, listen: v.listen, prefix: v.prefix, headers: v.header ?? [], pass: v.pass ?? [], reads: v.read ?? [], insecure: v.insecure });
       break;
     }
     case "visit": {

@@ -17,17 +17,19 @@ Work through the steps in order. Each ends on its **done when** line.
 
 The kit needs the app's source, runnable in dev: the demo is a build of the app's own front end with the tour inside it. A running container or image of the app is the dev install to record from, never the whole of what is needed; with no source, tell the user so and stop.
 
-The kit fits an app whose pages are drawn in the browser from data it reads over HTTP GET. Read the app's `package.json`, its router and its API client, then run it in dev with the browser's network panel open and click through it. In the panel, look at the requests each page makes: their method, their path's prefix, what they answer, and anything sent to another origin or over a WebSocket.
+The kit fits an app whose pages are drawn in the browser from data it reads over HTTP. Read the app's `package.json`, its router and its API client, then run it in dev with the browser's network panel open and click through it. In the panel, look at the requests each page makes: their method, their path's prefix, what they answer, whether a POST only reads (a chart's query, a search) or changes something, and anything sent to another origin, over a WebSocket, or from inside a frame.
 
 It fits when all three hold:
 
 - **Client-side routing**: React Router, Vue Router, Angular's router, TanStack Router, or similar, in an app served as static files (Vite, webpack, Angular CLI).
-- **Reads are GETs under one prefix**, such as `/api/`, answering JSON, or files the app links to for download. The kit replays `fetch` and `XMLHttpRequest` (axios) alike, and a link to a recorded file downloads it. Writes can be anything: the demo refuses them.
+- **Reads are GETs under one prefix**, such as `/api/`, answering JSON, or files the app links to for download, **or POSTs to paths that only read**, such as a dashboard's `/api/v1/chart/data`: those are recorded by their body. The kit replays `fetch` and `XMLHttpRequest` (axios) alike, and a link to a recorded file downloads it. Writes can be anything: the demo refuses them.
 - **Auth the recorder can carry**: a cookie or header it can forward or inject.
 
-It doesn't fit when pages arrive as server-rendered HTML (Next.js server components or `getServerSideProps`, Remix loaders, Rails, Django or PHP templates), when reads are POSTs (GraphQL, RPC), or when the data arrives over a WebSocket or server-sent events. Stop there and tell the user this kit can't replay that app: a **snapshot capture** of the rendered pages is needed instead.
+A frame of the app's own origin (a `srcdoc` preview, an embedded dashboard whose source you have) is part of the page: the tour points into it, and it reads from the recording too (step 3). A frame from another origin is outside the demo.
 
-**Done when** you can name the router, the API prefix and the auth, or you have told the user the app needs a snapshot capture.
+It doesn't fit when pages arrive as server-rendered HTML (Next.js server components or `getServerSideProps`, Remix loaders, Rails, Django or PHP templates), when reads and writes share one POST path (GraphQL, RPC: naming it as a read would let its writes through the recorder), or when the data arrives over a WebSocket or server-sent events. Stop there and tell the user this kit can't replay that app: a **snapshot capture** of the rendered pages is needed instead.
+
+**Done when** you can name the router, the API prefix, the POST paths that read (if any) and the auth, or you have told the user the app needs a snapshot capture.
 
 ## 2. Install
 
@@ -46,6 +48,7 @@ Adapt the copied entry until the app runs inside the frame:
 - **Hash routing.** A page opened from a file has no server to route paths: render the app's routes with the router's hash history (`createHashRouter`, `createWebHashHistory`, `withHashLocation`). Steps' `to` are routes as the router routes them.
 - **The API client** calls relative URLs (`/api/x`) or `DEMO_ORIGIN` from `@interroseclabs/demo-kit/replay`. One that builds URLs from `location.origin` works as is. One that calls another origin names it in `startDemo({ replay: { origins: ["https://api.example.com"] } })`.
 - **Sign-in.** A demo opens signed in: the recording answers the app's "who am I" read. A sign-in the app posts on its own is answered with a `replay.handlers` entry.
+- **Frames.** A same-origin frame that reads the API has as its first script `parent.demoKitReplay?.(window)`, so the demo answers its reads as it answers the page's. A frame that is a second app (an embedded dashboard) is built as one script too and given to its frame as `srcdoc`; [reference.md](reference.md) has the details.
 - **Fixed footer**: give its height as `bottomInset`, so the tour's dim leaves it uncovered.
 - **Colours**: set the `--gd-*` tokens in `src/demo/demo.css` to the app's own; [reference.md](reference.md) says what each one paints.
 - **One script.** `demoBuild()` makes the build one script and one stylesheet with every asset inlined, beside the page's icon, which `package` inlines too. An app on webpack or the Angular CLI configures its bundler for one chunk with inlined assets.
@@ -62,13 +65,13 @@ Record a dev install loaded with **synthetic** data: the app's seed, fixtures or
 
 ## 5. Record
 
-`demo/routes.txt` lists every page a viewer reaches by the app's own navigation (its menu, tabs and filters), one route a line, as the address bar shows it after the `#`, encoded (`/shipments?status=in%20transit`). A page reached only by clicking a record (a row's detail, a document, a download) is the crawl's: `demo/crawl.mjs` reads the recording so far and prints the paths those clicks read, one a line.
+`demo/routes.txt` lists every page a viewer reaches by the app's own navigation (its menu, tabs and filters), one route a line, as the address bar shows it after the `#`, encoded (`/shipments?status=in%20transit`). A page reached only by clicking a record (a row's detail, a document, a download) is the crawl's: `demo/crawl.mjs` reads the recording so far and prints the paths those clicks read, one a line. A click that reads by POST (a chart's filter, a toggle) is a line of its own, its body as the app sends it: `POST /api/query {"measure":"delayed","by":"carrier"}`.
 
-Start the recorder in front of the dev install's API, point the dev server's API proxy (Vite's `server.proxy`) at the recorder, then visit the routes and read the crawl's paths through it:
+Start the recorder in front of the dev install's API, naming each POST path that only reads with `--read`, point the dev server's API proxy (Vite's `server.proxy`) at the recorder, then visit the routes and read the crawl's paths through it:
 
 ```bash
 npx demo-kit record --upstream http://127.0.0.1:8000 --recording demo/recording.json --listen 127.0.0.1:8481 \
-  --header "Authorization: Bearer <dev token>"
+  --header "Authorization: Bearer <dev token>" --read "POST /api/query"
 npx demo-kit visit --origin http://localhost:5173 --routes demo/routes.txt
 node demo/crawl.mjs demo/recording.json > demo/paths.txt
 npx demo-kit fetch --paths demo/paths.txt --via http://127.0.0.1:8481
@@ -85,7 +88,7 @@ Add `demo/recording.json`, `demo/paths.txt`, `demo/misses.txt`, `dist-demo/` and
 Write `src/demo/chapters.ts`: four to seven chapters, each two to five steps, walking the story the app tells from data in to result out, and the end screen's points, one a chapter. [reference.md](reference.md) has the step fields and anchor forms.
 
 - **Anchors find what a viewer finds**: a `section` by its accessible name, an element by its `label` (aria-label), a button, link or table row by its `text`. Where an element has no accessible name, add one to the app (`aria-label` on a section): that helps every screen reader user too. A CSS `selector` is the last resort, for what has no name at all.
-- **Figures come from the recording.** Read each with `readJSON(recording, path)` and quote it, with words that still stand when the read is missing. Pick what a step features (a record to open, a port to name) from the recording too, so the anchor, the click and the words all point at the same thing. A figure typed by hand goes stale with the next recording.
+- **Figures come from the recording.** Read each with `readJSON(recording, path)`, or a POST read's with `readJSON(recording, path, { method: "POST", body })`, and quote it, with words that still stand when the read is missing. Pick what a step features (a record to open, a port to name) from the recording too, so the anchor, the click and the words all point at the same thing. A figure typed by hand goes stale with the next recording.
 - **Click steps** carry the story forward: the card asks the viewer to click what it points at, and Next clicks it for them. A step whose element only shows once something is open (a dialog, a panel) names that in `needs`.
 - **Copy states facts**: what the viewer is looking at and what it means, in the app's own terms. Titles are a few words; bodies are one or two sentences; a chapter's title and blurb fit one line each.
 
@@ -113,7 +116,7 @@ npx demo-kit check demo/app-demo-acme.html --routes demo/routes.txt --misses dem
 
 It opens the page from a file in headless Chrome, opens every route, downloads a recorded file, walks the tour by its own Next from the welcome to the end screen, explores freely, and opens the tour at a phone's width. Each `FAIL` names its cause:
 
-- **Not in the recording**: a read the recording lacks, listed in `demo/misses.txt`. With the recorder running, `npx demo-kit fetch --paths demo/misses.txt --via http://127.0.0.1:8481` reads them; add any that a click reaches to the crawl. Then build, package and check again.
+- **Not in the recording**: a read the recording lacks, listed in `demo/misses.txt`, a POST read with its body. With the recorder running, `npx demo-kit fetch --paths demo/misses.txt --via http://127.0.0.1:8481` reads them, sending each POST's body; add any that a click reaches to the crawl. Then build, package and check again.
 - **Its element isn't on the page**: the step's anchor names nothing on its page. Fix the anchor, or the step's `to`.
 - **Cut off**: a chapter's title or blurb too long for its line. Shorten it.
 - **Page error** or **loads from the network**: the app's own bug in the demo build, or a font, script or call it fetches from elsewhere. Inline the asset, or record the call.

@@ -218,6 +218,15 @@ dd {
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
+.preview {
+  margin-top: 12px;
+}
+.preview iframe {
+  display: block;
+  width: 100%;
+  height: 230px;
+  border: 0;
+}
 .doc .line {
   margin: 0;
   padding: 4px 0;

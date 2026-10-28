@@ -1,11 +1,14 @@
 // demo-kit record: a proxy in front of a dev install of the app. Point the app's dev server at it
-// and open each page the demo shows: every GET under the API prefix that answers 200 is kept.
-// Anything but a read is refused, except the requests --pass names (signing in), which go
-// through unrecorded, so a recording walk changes nothing.
+// and open each page the demo shows: every GET under the API prefix that answers 200 is kept, and
+// every POST that reads (--read names them: a chart's query, a search), by its body. Anything else
+// but a read is refused, except the requests --pass names (signing in), which go through
+// unrecorded, so a recording walk changes nothing.
 import { createServer } from "node:http";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+
+import { bodyHash } from "../dist/replay.js";
 
 const HOP = new Set(["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "content-length", "content-encoding"]);
 
@@ -27,7 +30,7 @@ export function passes(rules, method, path) {
 // isText is whether a body of this type is kept as text, not base64.
 export const isText = (type) => /^(application\/(json|.*\+json|xml|.*\+xml|javascript)|text\/)/i.test(type);
 
-export function startRecorder({ upstream, recording, listen = "127.0.0.1:8481", prefix = "/api/", headers = [], pass = [], insecure = false, maxBody = 8 << 20, log = console.log }) {
+export function startRecorder({ upstream, recording, listen = "127.0.0.1:8481", prefix = "/api/", headers = [], pass = [], reads = [], insecure = false, maxBody = 8 << 20, log = console.log }) {
   const up = new URL(upstream);
   const send = up.protocol === "https:" ? httpsRequest : httpRequest;
   const extra = headers.map(parseHeader);
@@ -45,22 +48,24 @@ export function startRecorder({ upstream, recording, listen = "127.0.0.1:8481", 
   // thousands of them until connections time out.
   const every = setInterval(flush, 2000);
 
-  const keep = (path, type, disposition, body) => {
+  const keep = (key, type, disposition, body, status) => {
     const text = isText(type);
     const entry = { type, body: text ? body.toString("utf8") : body.toString("base64") };
     if (!text) entry.base64 = true;
     if (disposition) entry.disposition = disposition;
-    const fresh = !(path in records);
-    records[path] = entry;
+    if (status !== 200) entry.status = status;
+    const fresh = !(key in records);
+    records[key] = entry;
     dirty = true;
-    if (fresh) log(`${String(body.length).padStart(9)}  ${path}`);
+    if (fresh) log(`${String(body.length).padStart(9)}  ${key}`);
   };
 
   const server = createServer((req, res) => {
     const method = req.method ?? "GET";
     const path = req.url ?? "/";
     const read = method === "GET" || method === "HEAD" || method === "OPTIONS";
-    if (!read && !passes(pass, method, path)) {
+    const readsBody = !read && path.startsWith(prefix) && passes(reads, method, path);
+    if (!read && !readsBody && !passes(pass, method, path)) {
       const body = JSON.stringify({ error: "The demo recorder changes nothing." });
       res.writeHead(403, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) });
       res.end(body);
@@ -72,6 +77,8 @@ export function startRecorder({ upstream, recording, listen = "127.0.0.1:8481", 
     for (const [k, v] of extra) out[k] = v;
     out.host = up.host;
     out["accept-encoding"] = "identity";
+    // A POST that reads is kept under its body's hash, so its body is read before it goes on.
+    const sent = [];
     const forward = send(
       { protocol: up.protocol, hostname: up.hostname, port: up.port, method, path: up.pathname.replace(/\/$/, "") + path, headers: out, rejectUnauthorized: !insecure },
       (answer) => {
@@ -80,9 +87,12 @@ export function startRecorder({ upstream, recording, listen = "127.0.0.1:8481", 
         answer.on("end", () => {
           const body = Buffer.concat(chunks);
           const type = String(answer.headers["content-type"] ?? "");
-          if (method === "GET" && path.startsWith(prefix) && answer.statusCode === 200) {
-            if (body.length > maxBody) log(`not kept, ${body.length} bytes: ${path}`);
-            else keep(path, type, answer.headers["content-disposition"], body);
+          const status = answer.statusCode;
+          const key = readsBody ? `${method} ${path} ${bodyHash(Buffer.concat(sent).toString("utf8"))}` : path;
+          const kept = (method === "GET" && status === 200) || (readsBody && (status === 200 || status === 201));
+          if (kept && path.startsWith(prefix)) {
+            if (body.length > maxBody) log(`not kept, ${body.length} bytes: ${key}`);
+            else keep(key, type, answer.headers["content-disposition"], body, status);
           }
           const back = {};
           for (const [k, v] of Object.entries(answer.headers)) if (!HOP.has(k)) back[k] = v;
@@ -97,6 +107,7 @@ export function startRecorder({ upstream, recording, listen = "127.0.0.1:8481", 
       if (!res.headersSent) res.writeHead(502, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) });
       res.end(body);
     });
+    if (readsBody) req.on("data", (c) => sent.push(c));
     req.pipe(forward);
   });
 

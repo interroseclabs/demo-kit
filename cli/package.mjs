@@ -53,8 +53,10 @@ export function rekey(raw, replace = []) {
   return out;
 }
 
-// A script's text can't hold "</script", which would end its element early.
-const scriptSafe = (s) => s.replace(/<\/(script)/gi, "<\\/$1");
+// A script's text can't hold "</script", which would end its element early, nor "<!--", after
+// which a "<script" in it keeps "</script>" from ending it at all. In a script both only occur in
+// strings, regular expressions and comments, where the escapes read the same.
+const scriptSafe = (s) => s.replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<\\u0021--");
 
 export async function packagePage({ recording, build, html = "demo.html", out, prospect, contactUrl, contactLabel = "Talk to us", replace = [], transform, allowDomain = [], title, log = console.log }) {
   let keyed = rekey(JSON.parse(readFileSync(recording, "utf8")), replace);

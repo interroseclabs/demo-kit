@@ -8,10 +8,16 @@ export type Recorded = {
   // The body is base64: a PDF, or anything else that isn't text.
   base64?: boolean;
   disposition?: string;
+  // The status it answered with where that isn't 200: a POST that reads may answer 201.
+  status?: number;
 };
 
-// Recording is every recorded GET, keyed by recordingKey.
+// Recording is every recorded read, keyed by recordingKey: each GET, and each POST that reads
+// (a chart's query, a search) by its body as well.
 export type Recording = Record<string, Recorded>;
+
+// BodyRead is a request that reads by what it sends, such as a POST of a chart's query.
+export type BodyRead = { method: string; body: string };
 
 // DEMO_ORIGIN is the origin the demo's own requests are read against. A page opened as a file has
 // the origin "null", which no request URL can be built on: an API client that builds absolute
@@ -27,17 +33,58 @@ export const RECORDING_ID = "demo-recording";
 export const MISSING = "Not in this demo: ";
 
 // recordingKey is a request's key in a recording: its path, decoded, and its query's parameters,
-// decoded and sorted, so neither encoding nor order matters. `demo-kit package` keys the
+// decoded and sorted, so neither encoding nor order matters. A read with a body is keyed by its
+// method and its body's hash too: "POST /api/query?a=1 0f3a…". `demo-kit package` keys the
 // recording with this same function.
-export function recordingKey(url: URL): string {
+export function recordingKey(url: URL, read?: BodyRead): string {
   const params = [...url.searchParams].sort(([a, av], [b, bv]) => compare(a, b) || compare(av, bv));
   const path = safeDecode(url.pathname);
-  return params.length === 0 ? path : `${path}?${params.map(([k, v]) => `${k}=${v}`).join("&")}`;
+  const key = params.length === 0 ? path : `${path}?${params.map(([k, v]) => `${k}=${v}`).join("&")}`;
+  return read ? `${read.method.toUpperCase()} ${key} ${bodyHash(read.body)}` : key;
 }
 
-// recordingKeyOf is recordingKey for a path and query as a proxy sees it, such as "/api/x?b=2&a=1".
+// A body read's key: its method, its path and query, and its body's hash.
+const BODY_KEY = /^([A-Z]+) (\S.*) ([0-9a-f]{14})$/;
+
+// recordingKeyOf is recordingKey for a path and query as a proxy sees it, such as "/api/x?b=2&a=1",
+// or for a body read as `demo-kit record` keeps it: "POST /api/x?b=2&a=1 <hash>".
 export function recordingKeyOf(raw: string): string {
+  const read = BODY_KEY.exec(raw);
+  if (read) return `${read[1]} ${recordingKey(new URL(read[2]!, DEMO_ORIGIN))} ${read[3]}`;
   return recordingKey(new URL(raw, DEMO_ORIGIN));
+}
+
+// bodyHash is a body's part of its key: a hash of it, as JSON with its keys sorted where it is
+// JSON, so the order an app writes them in doesn't count.
+export function bodyHash(body: string): string {
+  let text = body;
+  try {
+    text = JSON.stringify(sortedKeys(JSON.parse(body)));
+  } catch {
+    // Not JSON: keyed as sent.
+  }
+  return cyrb53(text).toString(16).padStart(14, "0");
+}
+
+function sortedKeys(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(sortedKeys);
+  if (v && typeof v === "object") return Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortedKeys((v as Record<string, unknown>)[k])]));
+  return v;
+}
+
+// cyrb53 is a fast 53-bit string hash (bryc's, public domain): enough to tell a page's queries
+// apart, and the same in Node and every browser.
+function cyrb53(s: string): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
 
 function safeDecode(s: string): string {
@@ -66,10 +113,10 @@ export function bytes(r: Recorded): Uint8Array<ArrayBuffer> | string {
   return out;
 }
 
-// readJSON is what the recording holds for a GET of path, parsed, or undefined: chapters read
-// their figures with it, so a step's words quote what the demo will show.
-export function readJSON<T = unknown>(recording: Recording, path: string): T | undefined {
-  const r = recording[recordingKeyOf(path)];
+// readJSON is what the recording holds for a GET of path, or for a read that sent a body, parsed,
+// or undefined: chapters read their figures with it, so a step's words quote what the demo will show.
+export function readJSON<T = unknown>(recording: Recording, path: string, read?: BodyRead): T | undefined {
+  const r = recording[read ? recordingKey(new URL(path, DEMO_ORIGIN), read) : recordingKeyOf(path)];
   if (!r || r.base64) return undefined;
   try {
     return JSON.parse(r.body) as T;
@@ -85,8 +132,11 @@ export type Handler = (request: Request, url: URL, recording: Recording) => Resp
 export type ReplayOptions = {
   // Handlers tried, in order, before the recording, for every request to the app's own API.
   handlers?: Handler[];
-  // Handlers tried, in order, after a GET the recording lacks, before it is refused.
+  // Handlers tried, in order, after a read the recording lacks, before it is refused.
   fallbacks?: Handler[];
+  // POSTs that read, as `demo-kit record --read` names them: "POST /api/query", a method and a
+  // path's start. A POST to a path the recording holds body reads for reads too, unnamed.
+  reads?: string[];
   // Other origins the app calls as its own API, such as "https://api.example.com". Requests to any
   // other origin, and to data: and blob: URLs, go to the browser's own fetch.
   origins?: string[];
@@ -101,28 +151,74 @@ export function lookup(recording: Recording, url: URL): Recorded | undefined {
   return recording[recordingKey(url)];
 }
 
-// answer is the demo's response to request, a request to the app's own API.
-export function answer(recording: Recording, request: Request, options: ReplayOptions = {}): Response {
+// answer is the demo's response to request, a request to the app's own API. body is what a request
+// other than a GET sends, as text, for a POST that reads: a Request's own body is only ever read
+// asynchronously.
+export function answer(recording: Recording, request: Request, options: ReplayOptions = {}, body?: string): Response {
   const url = new URL(request.url);
   for (const h of options.handlers ?? []) {
     const r = h(request, url, recording);
     if (r) return r;
   }
-  if (request.method !== "GET" && request.method !== "HEAD") {
+  const method = request.method.toUpperCase();
+  if (method === "GET" || method === "HEAD") return reply(recording, request, url, recordingKey(url), `${url.pathname}${url.search}`, options);
+  if (!readsByBody(recording, method, url, options.reads)) {
     return json(403, { error: options.refusal ?? "This is a demo of recorded data: it saves no changes." });
   }
-  const hit = lookup(recording, url);
+  const sent = oneLine(body ?? "");
+  return reply(recording, request, url, recordingKey(url, { method, body: sent }), `${method} ${url.pathname}${url.search} ${sent}`, options);
+}
+
+// reply is what the recording holds under key, or, after the fallbacks, a read it lacks: logged
+// with asked, the request as sent, for `demo-kit check` to count and `demo-kit fetch` to read.
+function reply(recording: Recording, request: Request, url: URL, key: string, asked: string, options: ReplayOptions): Response {
+  const hit = recording[key];
   if (!hit) {
     for (const h of options.fallbacks ?? []) {
       const r = h(request, url, recording);
       if (r) return r;
     }
-    console.warn(`${MISSING}${recordingKey(url)}  [${url.pathname}${url.search}]`);
+    console.warn(`${MISSING}${key}  [${asked}]`);
     return json(404, { error: options.missing ?? "That view isn't in this demo. The guided tour shows what is." });
   }
   const headers: Record<string, string> = { "Content-Type": hit.type };
   if (hit.disposition) headers["Content-Disposition"] = hit.disposition;
-  return new Response(request.method === "HEAD" ? null : bytes(hit), { status: 200, headers });
+  return new Response(request.method === "HEAD" ? null : bytes(hit), { status: hit.status ?? 200, headers });
+}
+
+// The paths, by method, that a recording holds body reads for.
+const readPaths = new WeakMap<Recording, Set<string>>();
+
+// readsByBody is whether a request other than a GET reads: where options name it, or where the
+// recording holds a read by body to its path. A body the recording lacks there is a read it lacks,
+// not a change to refuse.
+function readsByBody(recording: Recording, method: string, url: URL, rules: string[] = []): boolean {
+  const path = safeDecode(url.pathname);
+  const named = rules.some((rule) => {
+    const [m, p] = rule.trim().split(/\s+/, 2);
+    return m?.toUpperCase() === method && Boolean(p) && path.startsWith(p!);
+  });
+  if (named) return true;
+  let paths = readPaths.get(recording);
+  if (!paths) {
+    paths = new Set();
+    for (const key of Object.keys(recording)) {
+      const read = BODY_KEY.exec(key);
+      if (read) paths.add(`${read[1]} ${read[2]!.split("?")[0]}`);
+    }
+    readPaths.set(recording, paths);
+  }
+  return paths.has(`${method} ${path}`);
+}
+
+// oneLine is a JSON body as JSON.stringify writes it, on one line, which keys alike: the request a
+// missing read logs is one line of a file `demo-kit fetch` reads.
+function oneLine(body: string): string {
+  try {
+    return JSON.stringify(JSON.parse(body));
+  } catch {
+    return body;
+  }
 }
 
 // ownURL is raw read as a request to the app's own API, or null for one that isn't: another
@@ -157,22 +253,43 @@ export function downloadName(disposition: string | undefined, fallback = "downlo
   return /filename="?([^";]+)"?/.exec(disposition ?? "")?.[1]?.trim() || fallback;
 }
 
+// textOf is what a request sends, as text.
+async function textOf(body: unknown): Promise<string> {
+  if (body == null) return "";
+  if (typeof body === "string") return body;
+  if (typeof (body as Document).documentElement === "object") return new XMLSerializer().serializeToString(body as Document);
+  return new Response(body as BodyInit).text();
+}
+
 // installReplay answers every request the app makes to its own API from recording, by fetch or by
-// XMLHttpRequest, and turns each link to a recorded file into a download of it.
-export function installReplay(recording: Recording, options: ReplayOptions = {}): void {
-  const own = window.fetch.bind(window);
-  window.fetch = async (input, init) => {
-    const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+// XMLHttpRequest, turns each link to a recorded file into a download of it, and drops a beacon to
+// the API, which a page opened from a file can't send. win is the window it answers for: the
+// page's own, or a same-origin frame's, whose first script asks for it (see startDemo).
+export function installReplay(recording: Recording, options: ReplayOptions = {}, win: Window & typeof globalThis = window): void {
+  const own = win.fetch?.bind(win);
+  win.fetch = async (input, init) => {
+    // A frame's URL and Request are its own window's, so they are told apart by shape.
+    const asRequest = typeof input === "object" && !("href" in input) ? (input as Request) : null;
+    const raw = typeof input === "string" ? input : asRequest ? asRequest.url : (input as URL).href;
     const url = ownURL(raw, options.origins);
     if (!url) return own(input, init);
-    const request = input instanceof Request ? new Request(url, input) : new Request(url, init);
-    return answer(recording, request, options);
+    const method = (init?.method ?? asRequest?.method ?? "GET").toUpperCase();
+    const body = method === "GET" || method === "HEAD" ? undefined : init?.body != null ? await textOf(init.body) : await (asRequest?.clone().text() ?? "");
+    const request = new Request(url, { method, headers: init?.headers ?? asRequest?.headers, body });
+    const res = answer(recording, request, options, body);
+    // A frame's code is handed a Response of its own window, as its own fetch would hand it.
+    const Own = (win as { Response?: typeof Response }).Response;
+    if (win === window || !Own) return res;
+    return new Own(method === "HEAD" ? null : await res.arrayBuffer(), { status: res.status, statusText: res.statusText, headers: [...res.headers] });
   };
-  window.XMLHttpRequest = replayXHR(recording, options);
-  document.addEventListener(
+  win.XMLHttpRequest = replayXHR(recording, options, win);
+  const beacon = win.navigator.sendBeacon?.bind(win.navigator);
+  if (beacon) win.navigator.sendBeacon = (to, data) => (ownURL(String(to), options.origins) ? true : beacon(to, data));
+  win.document.addEventListener(
     "click",
     (e) => {
-      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      const t = e.target as Element | null;
+      const a = t && typeof t.closest === "function" ? t.closest("a[href]") : null;
       const href = a?.getAttribute("href");
       if (!a || !href || href.startsWith("#")) return;
       const url = ownURL(href, options.origins);
@@ -180,21 +297,21 @@ export function installReplay(recording: Recording, options: ReplayOptions = {})
       const hit = lookup(recording, url);
       if (!hit) return;
       e.preventDefault();
-      const blob = URL.createObjectURL(new Blob([bytes(hit)], { type: hit.type }));
-      const save = document.createElement("a");
+      const blob = win.URL.createObjectURL(new win.Blob([bytes(hit)], { type: hit.type }));
+      const save = win.document.createElement("a");
       save.href = blob;
       save.download = downloadName(hit.disposition, url.pathname.split("/").pop() || "download");
       save.click();
-      setTimeout(() => URL.revokeObjectURL(blob), 60_000);
+      setTimeout(() => win.URL.revokeObjectURL(blob), 60_000);
     },
     true,
   );
 }
 
 // replayXHR is an XMLHttpRequest that answers the app's own API from recording, for apps whose
-// client is built on it (axios, older clients). Any other request goes to the browser's own.
-export function replayXHR(recording: Recording, options: ReplayOptions = {}): typeof XMLHttpRequest {
-  const Native = window.XMLHttpRequest;
+// client is built on it (axios, older clients). Any other request goes to win's own.
+export function replayXHR(recording: Recording, options: ReplayOptions = {}, win: Window & typeof globalThis = window): typeof XMLHttpRequest {
+  const Native = win.XMLHttpRequest;
   class ReplayXHR extends EventTarget {
     static readonly UNSENT = 0;
     static readonly OPENED = 1;
@@ -274,10 +391,13 @@ export function replayXHR(recording: Recording, options: ReplayOptions = {}): ty
 
     send(body?: Document | XMLHttpRequestBodyInit | null) {
       if (!this.#url) return this.#passOn(body);
+      const url = this.#url;
+      const reads = this.#method === "GET" || this.#method === "HEAD";
       const init: RequestInit = { method: this.#method, headers: this.#headers };
-      if (body != null && this.#method !== "GET" && this.#method !== "HEAD") init.body = body as BodyInit;
-      const res = answer(recording, new Request(this.#url, init), options);
       const finish = async () => {
+        const sent = reads ? undefined : await textOf(body);
+        if (sent !== undefined && body != null) init.body = sent;
+        const res = answer(recording, new Request(url, init), options, sent);
         if (this.#aborted) return this.#fire("abort");
         this.status = res.status;
         this.statusText = res.statusText || (res.status === 200 ? "OK" : "");
@@ -293,7 +413,7 @@ export function replayXHR(recording: Recording, options: ReplayOptions = {}): ty
             this.response = buf;
             break;
           case "blob":
-            this.response = new Blob([buf], { type });
+            this.response = new win.Blob([buf], { type });
             break;
           case "json":
             try {

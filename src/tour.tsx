@@ -2,7 +2,7 @@ import type { ComponentChildren, JSX } from "preact";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Compass, Hand, ListOrdered, MousePointerClick, Play, RotateCcw, X } from "lucide-preact";
 
-import { findAnchor, sameRoute, scrollerOf, waitForAnchor, type Anchor } from "./anchor.js";
+import { findAnchor, sameRoute, screenBox, scrollerOf, waitForAnchor, windowsOf, type Anchor } from "./anchor.js";
 import type { DemoConfig } from "./config.js";
 import { place, visibleBox, type Box } from "./place.js";
 import type { Chapter, TourRouter, TourStep, Where } from "./steps.js";
@@ -64,9 +64,10 @@ function save(key: string, v: Saved) {
 
 // ── The page under the tour ───────────────────────────────────────────────────────
 
-// press is a viewer's click, or double-click, on e.
+// press is a viewer's click, or double-click, on e, in the window e is in: a frame's, maybe.
 function press(e: HTMLElement, double?: boolean) {
-  if (double) e.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
+  const view = e.ownerDocument.defaultView ?? window;
+  if (double) e.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view }));
   else e.click();
 }
 
@@ -74,8 +75,10 @@ function press(e: HTMLElement, double?: boolean) {
 function shut(open: Anchor) {
   const e = findAnchor(open);
   if (!e) return;
-  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  const doc = e.ownerDocument;
+  for (const t of new Set<EventTarget>([document, window, doc, doc.defaultView ?? window])) {
+    t.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  }
   setTimeout(() => {
     const still = findAnchor(open);
     const close =
@@ -91,7 +94,20 @@ const sameBox = (a: Box | null, b: Box | null) =>
   a === b ||
   (!!a && !!b && Math.abs(a.left - b.left) < 0.5 && Math.abs(a.top - b.top) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5);
 
-// useBox is where on screen anchor's element is, each frame, found again if the page redraws it.
+// onPage is whether e is on the page still: in it, and in frames that are. A frame that loads
+// another page leaves its earlier one's elements connected to that page, which no longer shows.
+function onPage(e: Element): boolean {
+  if (!e.isConnected) return false;
+  for (let doc = e.ownerDocument; doc !== document; ) {
+    const frame = doc.defaultView?.frameElement;
+    if (!frame?.isConnected) return false;
+    doc = frame.ownerDocument;
+  }
+  return true;
+}
+
+// useBox is where on screen anchor's element is, each frame, found again if the page redraws it,
+// through any frame it is in.
 function useBox(anchor: Anchor | undefined, found: HTMLElement | null): Box | null {
   const [box, setBox] = useState<Box | null>(null);
   const active = Boolean(anchor || found);
@@ -101,9 +117,9 @@ function useBox(anchor: Anchor | undefined, found: HTMLElement | null): Box | nu
     let frame = 0;
     let raf = 0;
     const tick = () => {
-      if ((!el || !el.isConnected) && anchor && frame++ % 10 === 0) el = findAnchor(anchor);
-      const r = el?.isConnected ? el.getBoundingClientRect() : null;
-      const next = r && r.width > 0 ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
+      if ((!el || !onPage(el)) && anchor && frame++ % 10 === 0) el = findAnchor(anchor);
+      const r = el && onPage(el) ? screenBox(el) : null;
+      const next = r && r.width > 0 ? r : null;
       setBox((prev) => (sameBox(prev, next) ? prev : next));
       raf = requestAnimationFrame(tick);
     };
@@ -132,7 +148,11 @@ function useLocation(router: TourRouter): Where {
   return at;
 }
 
-const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+// typing is whether a key goes into a field: in a frame's page too, whose elements are its own window's.
+const typing = (t: EventTarget | null) => {
+  const e = t as HTMLElement | null;
+  return Boolean(e && e.nodeType === 1 && (e.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName)));
+};
 
 // ── The demo ──────────────────────────────────────────────────────────────────────
 
@@ -422,16 +442,20 @@ function Guided({
     onNext();
   }, [onNext]);
 
-  // A click step goes on when the viewer clicks what it points at.
+  // A click step goes on when the viewer clicks what it points at, on the page or in a frame of it.
   useEffect(() => {
     if (!ready || !clickAnchor) return;
     const type = step.click?.double ? "dblclick" : "click";
     const on = (e: Event) => {
       const want = findAnchor(clickAnchor);
-      if (want && e.target instanceof Node && want.contains(e.target)) setTimeout(go, 80);
+      const t = e.target as Node | null;
+      if (want && t && typeof t.nodeType === "number" && want.contains(t)) setTimeout(go, 80);
     };
-    document.addEventListener(type, on, true);
-    return () => document.removeEventListener(type, on, true);
+    const docs = windowsOf(window).map((w) => w.document);
+    for (const d of docs) d.addEventListener(type, on, true);
+    return () => {
+      for (const d of docs) d.removeEventListener(type, on, true);
+    };
   }, [ready, clickAnchor, step.click?.double, go]);
 
   // Next takes a click step's click for the viewer, so the page moves as it would have.
@@ -442,6 +466,7 @@ function Guided({
     setTimeout(go, 500);
   }, [clickAnchor, step.click?.double, go]);
 
+  // The viewer's keys, wherever the focus is: a click in a frame takes it there.
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       // shut's own Escape, which closes what a step opened, isn't the viewer's.
@@ -450,9 +475,13 @@ function Guided({
       else if (e.key === "ArrowLeft" && step.index > 0) onBack();
       else if (e.key === "Escape" && !step.needs) onExplore();
     };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [forward, onBack, onExplore, step.index, step.needs]);
+    const wins = windowsOf(window);
+    for (const w of wins) w.addEventListener("keydown", key);
+    return () => {
+      for (const w of wins) w.removeEventListener("keydown", key);
+    };
+    // Again once the step is ready, by when its page's frames have loaded.
+  }, [forward, onBack, onExplore, step.index, step.needs, ready]);
 
   const box = useBox(step.anchor, target);
   const clickBox = useBox(ready ? clickAnchor : undefined, null);
@@ -648,9 +677,9 @@ function Explore({ steps, location, at, bottomInset, onGuide }: { steps: Step[];
       if (frame++ % 6 === 0) {
         const next = here.flatMap((step) => {
           const e = findAnchor(step.anchor!);
-          const r = e?.getBoundingClientRect();
+          const r = e && screenBox(e);
           if (!r || r.width === 0) return [];
-          const x = r.right - 16;
+          const x = r.left + r.width - 16;
           const y = r.top + 14;
           return y > view.top && y < view.top + view.height - 8 && x > 0 && x < view.width ? [{ step, x, y }] : [];
         });

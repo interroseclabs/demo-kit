@@ -89,6 +89,20 @@ createServer((req, res) => {
     res.end(buf);
   };
   if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(401, { error: "sign in first" });
+  // A query the report preview POSTs, as a dashboard asks for a chart's data: it reads, and
+  // changes nothing.
+  if (req.method === "POST" && url.pathname === "/api/query") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      const { measure, by } = JSON.parse(body || "{}");
+      const field = by === "carrier" ? "carrier" : "to";
+      const late = shipments.filter((s) => s.status === measure);
+      const rows = [...new Set(late.map((s) => s[field]))].map((name) => ({ name, count: late.filter((s) => s[field] === name).length }));
+      send(200, { measure, by, rows: rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)) });
+    });
+    return;
+  }
   if (req.method !== "GET") return send(201, { saved: true });
   for (const [re, answer] of routes) {
     const m = re.exec(url.pathname);

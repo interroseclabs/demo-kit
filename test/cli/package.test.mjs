@@ -99,3 +99,26 @@ test("emailsIn passes the domains reserved for examples", () => {
   );
   assert.deepEqual([...found].map(([d, f]) => [d, f.n]), [["real.io", 2]]);
 });
+
+test("keeps a script holding <!-- and <script from swallowing the rest of the page", async () => {
+  const dir = build();
+  // A library's source carried as a string, beside code that writes script tags: unescaped, the
+  // parser reads "<!--" then "<script" as a comment inside the script, and no "</script>" ends it.
+  writeFileSync(join(dir, "assets/demo-1.js"), 'const lib = "<!-- x"; const tag = "<script>" + lib + "</script>"; console.log(tag);');
+  const out = join(dir, "page.html");
+  await packagePage({ recording: recording({ "/api/me": { type: "application/json", body: "{}" } }), build: dir, out, log: () => {} });
+  const page = readFileSync(out, "utf8");
+  assert.ok(!page.includes("<!--"), "no <!-- is left in a script");
+  // Parsed as a browser parses it, the app's script ends where its own text does.
+  const { JSDOM } = await import("jsdom");
+  const doc = new JSDOM(page).window.document;
+  const app = doc.querySelector('script[type="module"]');
+  assert.match(app.textContent, /^const lib = "<\\u0021-- x";.*console\.log\(tag\);$/);
+  assert.ok(doc.getElementById("demo-recording"), "the recording after it is still its own element");
+});
+
+test("keys a POST that reads as the replay looks it up, by its URL and its body's hash", () => {
+  const keyed = rekey({ "POST /api/query?b=2&a=in%20transit 00f3a1b2c3d4e5": { type: "application/json", body: "{}", status: 201 } });
+  assert.deepEqual(Object.keys(keyed), ["POST /api/query?a=in transit&b=2 00f3a1b2c3d4e5"]);
+  assert.equal(keyed["POST /api/query?a=in transit&b=2 00f3a1b2c3d4e5"].status, 201);
+});
